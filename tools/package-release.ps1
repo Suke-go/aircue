@@ -11,7 +11,7 @@ foreach ($file in @('README.md','LICENSE','NOTICE.txt','THIRD_PARTY_ASIO.txt','T
   Copy-Item -LiteralPath (Join-Path $repo $file) -Destination $portable
 }
 Compress-Archive -Path (Join-Path $portable '*') -DestinationPath "$portable.zip" -Force
-$installers = @(Get-ChildItem -LiteralPath (Join-Path $targetDir 'release/bundle/nsis') -Filter '*-setup.exe')
+$installers = @(Get-ChildItem -LiteralPath (Join-Path $targetDir 'release/bundle/nsis') -Filter "*_${version}_*-setup.exe")
 if ($installers.Count -ne 1) { throw 'Expected exactly one NSIS installer' }
 Copy-Item -LiteralPath $installers[0].FullName -Destination (Join-Path $dist "AirCue-$version-windows-x64-setup.exe")
 if ($WithSource) {
@@ -34,6 +34,6 @@ if ($WithSource) {
   tar -czf (Join-Path $dist "AirCue-$version-source.tar.gz") -C $dist "AirCue-$version-source"
   if ($LASTEXITCODE -ne 0) { throw 'Corresponding source packaging failed' }
 }
-$assets = Get-ChildItem -LiteralPath $dist -File | Where-Object { $_.Extension -in @('.zip','.exe','.gz') }
+$assets = Get-ChildItem -LiteralPath $dist -File | Where-Object { $_.Name -like "AirCue-$version-*" -and $_.Extension -in @('.zip','.exe','.gz') }
 $assets | ForEach-Object { "{0}  {1}" -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name } |
   Set-Content -LiteralPath (Join-Path $dist 'SHA256SUMS.txt') -Encoding utf8

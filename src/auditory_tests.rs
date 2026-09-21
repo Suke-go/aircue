@@ -185,3 +185,112 @@ fn spatial_motion_and_gain_validation() {
     .validate(&[])
     .is_err());
 }
+
+#[test]
+fn spatial_positions_match_shared_editor_fixtures() {
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/spatial-cases.json")).unwrap();
+    for case in fixtures["cases"].as_array().unwrap() {
+        let mut json = serde_json::to_value(Design::default()).unwrap();
+        for (key, value) in case["patch"].as_object().unwrap() {
+            json[key] = value.clone();
+        }
+        let d: Design = serde_json::from_value(json).unwrap();
+        d.validate(&[]).unwrap();
+        let p = position_at(&d, case["at"].as_f64().unwrap());
+        for (i, v) in [p.azimuth, p.elevation, p.distance_m].iter().enumerate() {
+            assert!(
+                (v - case["expected"][i].as_f64().unwrap()).abs() < 1e-8,
+                "{}",
+                case["name"]
+            );
+        }
+    }
+}
+
+#[test]
+fn path_validation_roundtrip_and_legacy_audio_migration() {
+    let mut old = serde_json::to_value(Design::default()).unwrap();
+    old.as_object_mut().unwrap().remove("keyframes");
+    let old: Design = serde_json::from_value(old).unwrap();
+    assert!(old.keyframes.is_empty());
+    let mut d = Design {
+        motion: "path".into(),
+        keyframes: vec![
+            Keyframe {
+                at: 0.,
+                azimuth: -90.,
+                elevation: 0.,
+                distance_m: 1.,
+            },
+            Keyframe {
+                at: 0.5,
+                azimuth: 0.,
+                elevation: 90.,
+                distance_m: 2.,
+            },
+            Keyframe {
+                at: 1.,
+                azimuth: 90.,
+                elevation: 0.,
+                distance_m: 1.,
+            },
+        ],
+        ..old
+    };
+    d.validate(&[]).unwrap();
+    assert_eq!(
+        d,
+        serde_json::from_str::<Design>(&serde_json::to_string(&d).unwrap()).unwrap()
+    );
+    d.keyframes[1].at = 0.;
+    assert!(d.validate(&[]).is_err());
+    d.keyframes[1].at = 0.5;
+    d.keyframes[1].elevation = f64::NAN;
+    assert!(d.validate(&[]).is_err());
+    d.keyframes.clear();
+    assert!(d.validate(&[]).is_err());
+}
+
+#[test]
+fn path_distance_is_applied_in_render_and_stereo_bypass_ignores_path() {
+    let d = Design {
+        spatial: true,
+        source: "sine".into(),
+        duration_ms: 80.,
+        ..Default::default()
+    };
+    let near = render_design(&d, &[], Path::new(".")).unwrap();
+    let mut path = Design {
+        motion: "path".into(),
+        keyframes: vec![
+            Keyframe {
+                at: 0.,
+                azimuth: 0.,
+                elevation: 0.,
+                distance_m: 1.,
+            },
+            Keyframe {
+                at: 1.,
+                azimuth: 0.,
+                elevation: 0.,
+                distance_m: 4.,
+            },
+        ],
+        ..d.clone()
+    };
+    let moving = render_design(&path, &[], Path::new(".")).unwrap();
+    for (i, (a, b)) in near.chunks_exact(2).zip(moving.chunks_exact(2)).enumerate() {
+        let distance = 1. + 3. * i as f32 / (near.len() / 2) as f32;
+        assert!((a[0] - b[0] * distance).abs() < 1e-6);
+    }
+    path.spatial = false;
+    let dry = Design {
+        spatial: false,
+        ..d
+    };
+    assert_eq!(
+        render_design(&path, &[], Path::new(".")).unwrap(),
+        render_design(&dry, &[], Path::new(".")).unwrap()
+    );
+}

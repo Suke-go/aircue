@@ -1,10 +1,10 @@
 {
   "name": "aircue",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "tauri": "tauri",
-    "check": "node --check web/app.js && node --check web/auditory.js && node tools/check-version.cjs"
+    "check": "node --check web/app.js && node --check web/auditory.js && node --check web/spatial.js && node --check web/spatial-editor.js && node --test tests/spatial.test.cjs && node tools/check-version.cjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.5"

@@ -19,6 +19,14 @@ pub struct Asset {
     pub source_channels: usize,
     pub peaks: Vec<f32>,
 }
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Keyframe {
+    pub at: f64,
+    pub azimuth: f64,
+    pub elevation: f64,
+    pub distance_m: f64,
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Design {
@@ -36,6 +44,8 @@ pub struct Design {
     pub motion: String,
     pub speed: f64,
     pub end_azimuth: f64,
+    #[serde(default)]
+    pub keyframes: Vec<Keyframe>,
 }
 impl Default for Design {
     fn default() -> Self {
@@ -54,6 +64,7 @@ impl Default for Design {
             motion: "fixed".into(),
             speed: 45.,
             end_azimuth: 90.,
+            keyframes: Vec::new(),
         }
     }
 }
@@ -82,8 +93,28 @@ impl Design {
         model::range(self.elevation, -40., 90., "仰角")?;
         model::range(self.distance_m, 0.3, 5., "音源距離")?;
         model::range(self.speed, -360., 360., "回転速度")?;
-        if !["fixed", "orbit", "sweep"].contains(&self.motion.as_str()) {
+        if !["fixed", "orbit", "sweep", "path"].contains(&self.motion.as_str()) {
             return Err("音源の移動方法が不正です".into());
+        }
+        if self.keyframes.len() > 32 {
+            return Err("経路は32点までです".into());
+        }
+        if self.motion == "path" || !self.keyframes.is_empty() {
+            if self.keyframes.len() < 2
+                || self.keyframes[0].at != 0.
+                || self.keyframes.last().unwrap().at != 1.
+            {
+                return Err("経路には開始と終了の点が必要です".into());
+            }
+            for (i, key) in self.keyframes.iter().enumerate() {
+                model::range(key.at, 0., 1., "通過点の時刻")?;
+                model::range(key.azimuth, -180., 180., "通過点の方位")?;
+                model::range(key.elevation, -40., 90., "通過点の仰角")?;
+                model::range(key.distance_m, 0.3, 5., "通過点の距離")?;
+                if i > 0 && key.at - self.keyframes[i - 1].at < 0.000999999 {
+                    return Err("通過点は再生時間の0.1%以上の間隔で配置してください".into());
+                }
+            }
         }
         if self.source == "file" {
             let a = assets
@@ -96,6 +127,41 @@ impl Design {
         }
         Ok(())
     }
+}
+/// Position at normalized clip time. Legacy sweep intentionally keeps its original angular interpolation.
+fn position_at(d: &Design, progress: f64) -> Keyframe {
+    let t = progress.clamp(0., 1.);
+    let mut pose = Keyframe {
+        at: t,
+        azimuth: d.azimuth,
+        elevation: d.elevation,
+        distance_m: d.distance_m,
+    };
+    match d.motion.as_str() {
+        "orbit" => pose.azimuth += d.speed * t * d.duration_ms / 1000.,
+        "sweep" => pose.azimuth += (d.end_azimuth - d.azimuth) * t,
+        "path" => {
+            let next = d
+                .keyframes
+                .partition_point(|key| key.at < t)
+                .max(1)
+                .min(d.keyframes.len() - 1);
+            let a = d.keyframes[next - 1];
+            let b = d.keyframes[next];
+            let blend = (t - a.at) / (b.at - a.at);
+            let raw = b.azimuth - a.azimuth;
+            let mut angle = (raw + 180.).rem_euclid(360.) - 180.;
+            if angle == -180. && raw > 0. {
+                angle = 180.;
+            }
+            pose.azimuth = a.azimuth + angle * blend;
+            pose.elevation = a.elevation + (b.elevation - a.elevation) * blend;
+            pose.distance_m = a.distance_m + (b.distance_m - a.distance_m) * blend;
+        }
+        _ => {}
+    }
+    pose.azimuth = (pose.azimuth + 180.).rem_euclid(360.) - 180.;
+    pose
 }
 pub fn asset_path(dir: &Path, id: &str) -> Result<PathBuf, String> {
     if id.len() != 70
@@ -445,20 +511,29 @@ pub fn render_design(d: &Design, assets: &[Asset], dir: &Path) -> Result<Vec<f32
         .map(|f| (f[0] + f[1]) * 0.5)
         .collect();
     let mut output = vec![0.; frames * 2];
-    let mut filter = hrtf(d.azimuth, d.elevation);
-    let atten = gain / (d.distance_m.max(1.) as f32);
+    let mut pose = position_at(d, 0.);
+    let mut filter = hrtf(pose.azimuth, pose.elevation);
     let block = 384;
-    for start in (0..frames).step_by(block) {
-        let end = (start + block).min(frames);
-        let t = end as f64 / RATE as f64;
-        let angle = match d.motion.as_str() {
-            "orbit" => d.azimuth + d.speed * t,
-            "sweep" => d.azimuth + (d.end_azimuth - d.azimuth) * end as f64 / frames as f64,
-            _ => d.azimuth,
-        };
-        let next = hrtf(angle, d.elevation);
+    let mut start = 0;
+    while start < frames {
+        let mut end = (start + block).min(frames);
+        if d.motion == "path" {
+            if let Some(boundary) = d
+                .keyframes
+                .iter()
+                .map(|k| (k.at * frames as f64).ceil() as usize)
+                .find(|n| *n > start)
+            {
+                end = end.min(boundary);
+            }
+        }
+        let next_pose = position_at(d, end as f64 / frames as f64);
+        let next = hrtf(next_pose.azimuth, next_pose.elevation);
         for i in start..end {
             let blend = (i - start) as f32 / (end - start) as f32;
+            let distance =
+                pose.distance_m as f32 * (1. - blend) + next_pose.distance_m as f32 * blend;
+            let atten = gain / distance.max(1.);
             let mut frame = [0.; 2];
             for k in 0..filter.len().min(i + 1) {
                 let v = mono[i - k];
@@ -469,6 +544,8 @@ pub fn render_design(d: &Design, assets: &[Asset], dir: &Path) -> Result<Vec<f32
             output[i * 2 + 1] = frame[1] * atten;
         }
         filter = next;
+        pose = next_pose;
+        start = end;
     }
     model::check_peak(&output, 1.)?;
     Ok(output)

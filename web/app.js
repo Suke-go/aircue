@@ -91,7 +91,7 @@ async function boot(){
  $$('[data-window]').forEach(b=>b.onclick=()=>attempt(()=>goView(b.dataset.window)));
  renderView();message('準備完了');const error=await invoke('startup_error');if(error)message(error,true);
  await listen('project-changed',({payload:p})=>{project=p;if(view==='timeline')renderTimeline();else if(view==='settings'){if(!document.activeElement?.matches('input,select')){settings();renderDevices()}}else if(view==='waveform'&&!dirty&&JSON.stringify(draft)!==JSON.stringify(p.draft)){draft=clone(p.draft);selected=Math.min(selected,draft.parts.length-1);creation()}});
- let lastError=null;setInterval(async()=>{try{const s=await invoke('audio_status');$('#play-status').textContent=s.playing?'再生中 · '+s.positionMs.toFixed(0)+' ms':'';if(s.error&&s.error!==lastError){message(s.error,true);lastError=s.error}if(view==='audio')drawAudioPosition(s.playing&&s.mode==='audio'?s.positionMs:0);if(view==='timeline')$$('.aw-playhead').forEach(el=>{el.hidden=!s.playing||s.mode!=='timeline';el.style.left=Math.min(100,s.positionMs/project.durationMs*100)+'%'});}catch{}},100);
+ let lastError=null;setInterval(async()=>{try{const s=await invoke('audio_status');$('#play-status').textContent=s.playing?'再生中 · '+s.positionMs.toFixed(0)+' ms':'';if(s.error&&s.error!==lastError){message(s.error,true);lastError=s.error}if(view==='audio')drawAudioPosition(s.playing&&s.mode==='audio'?s.positionMs:null);if(view==='timeline')$$('.aw-playhead').forEach(el=>{el.hidden=!s.playing||s.mode!=='timeline';el.style.left=Math.min(100,s.positionMs/project.durationMs*100)+'%'});}catch{}},100);
  window.addEventListener('resize',plot);
 }
 boot().catch(e=>message('起動できませんでした: '+e,true));
