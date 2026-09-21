@@ -1,0 +1,9 @@
+MIT KEMAR HRTF data
+Copyright 1994 MIT Media Laboratory.
+Authors: Bill Gardner and Keith Martin.
+Source and usage terms: https://sound.media.mit.edu/resources/KEMAR.html
+Data: https://sound.media.mit.edu/resources/KEMAR/diffuse.zip
+
+The authors permit research and commercial use without a fee or use restrictions provided they are cited. AirCue credits the authors here and in the audio editor.
+
+AirCue uses the diffuse-field-equalized compact impulse responses. The 44.1 kHz responses were converted to 48 kHz with scipy.signal.resample_poly, including a 44100/48000 FIR-gain adjustment. Right-hemisphere measurements are mirrored by exchanging ears for the left hemisphere. The conversion script is tools/build_hrtf.py.

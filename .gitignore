@@ -1,0 +1,13 @@
+/target
+/data
+/*.exe
+/diagnostics.json
+
+/node_modules
+/dist
+/.build-tools
+/gen
+/*.zip
+/*.tar.gz
+*.aircue
+*.media/

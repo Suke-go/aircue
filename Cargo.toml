@@ -1,0 +1,32 @@
+[package]
+name = "aircue"
+version = "0.2.0"
+edition = "2021"
+description = "AirCue waveform, headphone audio, and timeline editor"
+license = "GPL-3.0-only"
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = ["custom-protocol"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+cpal = "=0.15.3"
+hound = "3.5"
+symphonia = { version = "=0.5.5", features = ["all"] }
+sha2 = "0.10"
+
+[features]
+default = []
+asio = ["cpal/asio"]
+
+[profile.release]
+opt-level = 2
+strip = true
+
+[[bin]]
+name = "AirCue"
+path = "src/main.rs"
+

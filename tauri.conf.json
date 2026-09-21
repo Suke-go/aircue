@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AirCue",
+  "version": "0.2.0",
+  "identifier": "local.aircue.studio",
+  "build": {
+    "frontendDist": "./web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "AirCue 0.2.0",
+        "url": "index.html?view=waveform",
+        "width": 1120,
+        "height": 760,
+        "minWidth": 760,
+        "minHeight": 600,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "LICENSE",
+      "NOTICE.txt",
+      "THIRD_PARTY_ASIO.txt",
+      "THIRD_PARTY_HRTF.txt"
+    ],
+    "shortDescription": "Air-puff and headphone audio editor",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "Japanese",
+          "English"
+        ],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

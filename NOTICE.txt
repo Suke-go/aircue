@@ -1,0 +1,12 @@
+AirCue 0.2.0
+Copyright (C) 2026 AirCue contributors.
+
+AirCue is distributed under GNU GPL version 3 only. See LICENSE.
+The ASIO SDK is used under its GPLv3 licensing option.
+The repository may remain private; recipients receive corresponding source
+in the same GitHub Release, including Rust dependencies and the ASIO SDK.
+
+MIT KEMAR HRTF: Copyright 1994 MIT Media Laboratory.
+Bill Gardner and Keith Martin. See THIRD_PARTY_HRTF.txt.
+ASIO: Steinberg Media Technologies GmbH. See THIRD_PARTY_ASIO.txt.
+Other dependency license notices are included in the vendored corresponding source.
