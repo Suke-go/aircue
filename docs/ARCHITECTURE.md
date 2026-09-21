@@ -27,6 +27,7 @@ flowchart LR
 | `web/spatial.js` | プリセット、経路の補間と通過点の追加 |
 | `web/spatial-editor.js` | 音源位置の図、通過点、確認スライダー |
 | `src/unity_export.rs` | Unity用音声・メタデータ・Importerの書き出し |
+| `src/experiment.rs` | ローカル実験プロトコル、刺激準備、試行記録 |
 | `unity/Runtime`・`unity/Editor` | UnityのPrefab生成、PCM取り込み、再生 |
 | `src/main.rs` | Tauriコマンド、永続化、ファイルダイアログ、書き出し |
 | `src/model.rs` | 空気砲波形、標準波形、プロジェクト検証、駆動波形の合成 |
@@ -49,6 +50,8 @@ flowchart LR
 立体音響の実装仕様は [SPATIAL_AUDIO.md](SPATIAL_AUDIO.md) にまとめています。v0.3.0で位置・高さ・距離のキーフレーム経路、8種類の定位プリセット、経路の視覚確認を実装しました。
 
 Unityへの完成音響・タイミングの書き出しはv0.4.0で実装しています。[Unity連携設計](UNITY_INTEGRATION.md) を参照してください。実測による校正、空気流のモデル、個人化HRTFは未実装です。
+
+Unityを試行管理、AirCueを4ch再生に使うローカル実験連携はv0.5.0で実装しています。[実験同期設計](EXPERIMENT_SYNC.md) を参照してください。
 
 ## 配布
 

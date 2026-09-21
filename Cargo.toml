@@ -1,6 +1,6 @@
 [package]
 name = "aircue"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "AirCue waveform, headphone audio, and timeline editor"
 license = "GPL-3.0-only"
@@ -17,6 +17,7 @@ cpal = "=0.15.3"
 hound = "3.5"
 symphonia = { version = "=0.5.5", features = ["all"] }
 sha2 = "0.10"
+getrandom = "=0.3.4"
 
 [features]
 default = []
@@ -29,4 +30,3 @@ strip = true
 [[bin]]
 name = "AirCue"
 path = "src/main.rs"
-

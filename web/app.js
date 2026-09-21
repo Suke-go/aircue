@@ -75,24 +75,24 @@ function renderDevices(){
 }
 async function refreshDevices(){$('#refresh-devices').disabled=true;message('出力機器を確認中…');try{devices=await invoke('list_devices');renderDevices();message('出力機器を更新しました')}finally{if($('#refresh-devices'))$('#refresh-devices').disabled=false}}
 function renderView(){
- $('#title').textContent={waveform:'波形作成',audio:'オーディオ',timeline:'タイムライン',settings:'出力設定'}[view];
+ $('#title').textContent={waveform:'波形作成',audio:'オーディオ',timeline:'タイムライン',experiment:'実験連携',settings:'出力設定'}[view];
  $$('[data-window]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.window===view)));
- if(view==='waveform')creation();else if(view==='audio')audioEditor();else if(view==='timeline')timeline();else{settings();attempt(refreshDevices)}
+ if(view==='waveform')creation();else if(view==='audio')audioEditor();else if(view==='timeline')timeline();else if(view==='experiment')experimentEditor();else{settings();attempt(refreshDevices)}
 }
 let switching=false;
 async function goView(next){
- if(switching||!['waveform','audio','timeline','settings'].includes(next))return;
+ if(switching||!['waveform','audio','timeline','experiment','settings'].includes(next))return;
  switching=true;
  try{if(view==='audio')await flushAudioDraft();await pending;project=await invoke('get_project');draft=clone(project.draft);selected=Math.min(selected,draft.parts.length-1);view=next;history.replaceState(null,'','?view='+view);renderView();}
  finally{switching=false;}
 }
 async function boot(){
  [project,presets]=await Promise.all([invoke('get_project'),invoke('get_presets')]);draft=clone(project.draft);
- if(!['waveform','audio','timeline','settings'].includes(view))view='waveform';
+ if(!['waveform','audio','timeline','experiment','settings'].includes(view))view='waveform';
  $$('[data-window]').forEach(b=>b.onclick=()=>attempt(()=>goView(b.dataset.window)));
  renderView();message('準備完了');const error=await invoke('startup_error');if(error)message(error,true);
  await listen('project-changed',({payload:p})=>{project=p;if(view==='timeline')renderTimeline();else if(view==='settings'){if(!document.activeElement?.matches('input,select')){settings();renderDevices()}}else if(view==='waveform'&&!dirty&&JSON.stringify(draft)!==JSON.stringify(p.draft)){draft=clone(p.draft);selected=Math.min(selected,draft.parts.length-1);creation()}});
- let lastError=null;setInterval(async()=>{try{const s=await invoke('audio_status');$('#play-status').textContent=s.playing?'再生中 · '+s.positionMs.toFixed(0)+' ms':'';if(s.error&&s.error!==lastError){message(s.error,true);lastError=s.error}if(view==='audio')drawAudioPosition(s.playing&&s.mode==='audio'?s.positionMs:null);if(view==='timeline')$$('.aw-playhead').forEach(el=>{el.hidden=!s.playing||s.mode!=='timeline';el.style.left=Math.min(100,s.positionMs/project.durationMs*100)+'%'});}catch{}},100);
+ let lastError=null;setInterval(async()=>{try{const s=await invoke('audio_status');$('#play-status').textContent=s.playing?'再生中 · '+s.positionMs.toFixed(0)+' ms':'';if(s.error&&s.error!==lastError){message(s.error,true);lastError=s.error}if(view==='audio')drawAudioPosition(s.playing&&s.mode==='audio'?s.positionMs:null);if(view==='timeline')$$('.aw-playhead').forEach(el=>{el.hidden=!s.playing||s.mode!=='timeline';el.style.left=Math.min(100,s.positionMs/project.durationMs*100)+'%'});if(view==='experiment')await refreshExperiment();}catch{}},100);
  window.addEventListener('resize',plot);
 }
 boot().catch(e=>message('起動できませんでした: '+e,true));

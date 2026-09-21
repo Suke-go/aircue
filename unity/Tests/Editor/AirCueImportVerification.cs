@@ -38,7 +38,13 @@ public static class AirCueImportVerification
         Require(!importer.forceToMono && importer.defaultSampleSettings.compressionFormat == AudioCompressionFormat.PCM, "lossless import settings");
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         Require(AssetDatabase.LoadAssetAtPath<GameObject>(path).GetComponent<AirCuePlayer>().sequence, "reimport retains references");
-        Debug.Log("AIRCUE_UNITY_VERIFIED: prefab, references, PCM channels, frame timing, routing and reimport");
+        var clientObject = new GameObject("AirCue experiment client verification");
+        var client = clientObject.AddComponent<AirCueExperimentClient>();
+        Require(client.host == "127.0.0.1" && client.port == 39100, "localhost experiment defaults");
+        Require(client.target == AirCueExperimentClient.Target.All && client.delayMs == 100, "experiment trial defaults");
+        Require(client.trialId == "trial-001", "experiment trial id default");
+        UnityEngine.Object.DestroyImmediate(clientObject);
+        Debug.Log("AIRCUE_UNITY_VERIFIED: prefab, references, PCM channels, frame timing, routing, reimport and experiment client");
     }
     private static void Require(bool condition, string description)
     {

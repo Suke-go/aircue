@@ -6,6 +6,14 @@
 
 `AirCuePlayer` の `Play On Start` を外せば、UI ButtonのOnClickやスクリプトから `Play()` / `Stop()` を呼べます。同じPlayerのPlayは再スタートします。複数Playerの同時再生は音量が加算されます。
 
+## AirCueデスクトップとの実験同期
+
+AirCueのASIO・4ch出力を使ってUnityから試行を開始する場合は、空のGameObjectへ`AirCueExperimentClient`を追加します。AirCueの「実験連携」で接続を開始し、表示されたポートとセッショントークンをInspectorへ入力します。
+
+`CheckStatus`、`Prepare`、`Play`、`StopRemote`をUnityEventまたは実験スクリプトから呼べます。`responseReceived`にはAirCueのJSON応答、`errorReceived`には接続エラーが渡ります。Prepareの成功を確認してから試行ごとに一意の`trialId`を設定し、Playを呼びます。通信中もUnityのメインスレッドを停止しません。
+
+デスクトップ同期では`AirCuePlayer`を同時に再生しないでください。AirCuePlayerは書き出した音声をUnity自身で鳴らす用途、ExperimentClientはデスクトップAirCueへ再生を依頼する用途です。詳細は `docs/EXPERIMENT_SYNC.md` を参照してください。
+
 ## 音響と出力
 
 音源の移動・高さ・距離・レベルはWAVへ反映済みです。立体音響オフのクリップはステレオのままです。Unityで追加のSpatializerや3D減衰を設定する必要はありません。頭部追跡やワールド座標への追従は行いません。UnityのAudio Listener音量など、プロジェクト全体の設定は再生結果に影響します。

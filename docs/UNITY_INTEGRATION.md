@@ -1,4 +1,4 @@
-# Unity連携 — v0.4.0
+# Unity連携 — v0.5.0
 
 ## 採用方式
 
@@ -12,8 +12,9 @@ AirCueで完成させた音響をそのまま再生する。HRTF、経路、距�
 
 ```text
 AirCueUnity/
-  Runtime/                 再生コンポーネントとSequenceデータ
+  Runtime/                 再生・実験連携コンポーネントとSequenceデータ
   Editor/                  自動取り込み
+  docs/EXPERIMENT_SYNC.md  実験同期の通信仕様
   Sequences/Sequence-ID/
     Sequence.aircueseq     バージョン付きJSON
     headphones.wav         2ch・イヤホン左／右
@@ -35,6 +36,8 @@ ScriptedImporterが `.aircueseq` と隣接WAVの依存関係を登録し、再�
 
 AirCuePlayerの初期出力はHeadphones。Play On Startを無効にして `Play()` / `Stop()` をゲーム側から呼べる。Playは同じPlayerの既存再生を停止して開始し直す。AudioSourceのSpatial Blend、パン、ピッチ、追加エフェクトとMixer参照を初期化し、定位済みWAVに追加の空間処理をかけない。シーンにはAudio Listenerが必要。
 
+AirCueのASIO・4ch出力をUnityの試行から操作する場合は、同梱する `AirCueExperimentClient` を使う。Unityは試行ID・回答・条件を管理し、AirCueは準備済みの現在のタイムラインを再生してJSONLを残す。書き出した音声をUnityで鳴らす `AirCuePlayer` とは同時に使わない。通信手順、時刻の意味、制約は [実験連携](EXPERIMENT_SYNC.md) にまとめる。
+
 4ch版のRouted QuadはUnityのSpeaker ModeがQuadの場合のみ開始する。2chへのフォールバックは行わない。デバイス選択・ドライバー・物理端子の対応はUnityとOSの設定に依存し、AirCueのCPAL/ASIO設定は移植しない。OS側のダウンミックスや実端子対応はソフトウェア検査だけでは保証できない。
 
 AudioSource.PlayScheduledでDSP時刻を指定する。各マーカーの予定時刻は `ScheduledDspTime + startFrame / sampleRate`。1本の4chファイル内では音声と空気砲のタイミングを共有する。別デバイス同士のクロック同期、物理音響遅延、メインスレッドのUpdateによるサンプル精度の空気砲制御は対象外。
@@ -43,7 +46,7 @@ AudioSource.PlayScheduledでDSP時刻を指定する。各マーカーの予定�
 
 Rustテストで入れ替えたch割り当てを使用し、2ch・4ch・空気砲のサンプル一致、無音区間、フレーム数、マーカーを確認する。空のタイムラインや不正なプロジェクトは書き出し前に拒否する。
 
-Unity 6000.4.3f1の専用プロジェクトで、`tests/unity-project.json` の書き出しを取り込み、Prefab、サブアセット、PCM値、チャンネル、時刻、再取り込み後の参照を検証した。検証コードは `unity/Tests/Editor/AirCueImportVerification.cs`。このテストコードは配布フォルダーに含めない。GitHub ActionsではUnityライセンスを設定していないため、Rust・JavaScript・Tauriの検証を実行し、Unity検証はローカルで行う。
+Unity 6000.4.3f1の専用プロジェクトで、`tests/unity-project.json` の書き出しを取り込み、Prefab、サブアセット、PCM値、チャンネル、時刻、再取り込み後の参照、ExperimentClientのコンパイルと初期値を検証した。検証コードは `unity/Tests/Editor/AirCueImportVerification.cs`。このテストコードは配布フォルダーに含めない。GitHub ActionsではUnityライセンスを設定していないため、Rust・JavaScript・Tauriの検証を実行し、Unity検証はローカルで行う。
 
 CLIでも `AirCue.exe --export-unity project.aircue destination` で書き出せる。`.aircue` の音声素材は同名の `.media` から読み込む。検証用JSONの場合は同じフォルダーを素材の基準とする。失敗時は終了コード1を返す。
 

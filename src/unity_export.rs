@@ -12,10 +12,18 @@ const FILES: &[(&str, &str)] = &[
         include_str!("../unity/Runtime/AirCuePlayer.cs"),
     ),
     (
+        "Runtime/AirCueExperimentClient.cs",
+        include_str!("../unity/Runtime/AirCueExperimentClient.cs"),
+    ),
+    (
         "Editor/AirCueImporter.cs",
         include_str!("../unity/Editor/AirCueImporter.cs"),
     ),
     ("README.md", include_str!("../unity/README.md")),
+    (
+        "docs/EXPERIMENT_SYNC.md",
+        include_str!("../docs/EXPERIMENT_SYNC.md"),
+    ),
     ("LICENSE", include_str!("../LICENSE")),
     (
         "THIRD_PARTY_HRTF.txt",
@@ -156,6 +164,10 @@ mod tests {
         assert!(air[4800..].iter().any(|v| *v != 0));
         assert!(samples("air-right.wav").iter().all(|v| *v == 0));
         assert!(output.join("AirCueUnity/Editor/AirCueImporter.cs").exists());
+        assert!(output
+            .join("AirCueUnity/Runtime/AirCueExperimentClient.cs")
+            .exists());
+        assert!(output.join("AirCueUnity/docs/EXPERIMENT_SYNC.md").exists());
         std::fs::remove_dir_all(output).unwrap();
         std::fs::remove_dir(&dir).unwrap();
     }

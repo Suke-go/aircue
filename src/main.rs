@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod audio;
 mod auditory;
+mod experiment;
 mod model;
 mod unity_export;
 use model::{Clip, Project, Settings, Wave};
@@ -10,6 +11,7 @@ use tauri_plugin_dialog::DialogExt;
 struct App {
     project: Mutex<Project>,
     audio: audio::Audio,
+    experiment: experiment::Runtime,
     dir: PathBuf,
     startup_error: Option<String>,
 }
@@ -38,6 +40,7 @@ fn change(
     next.validate()?;
     persist(&s.dir, &next)?;
     *locked = next.clone();
+    s.experiment.invalidate(app);
     app.emit("project-changed", &next)
         .map_err(|e| e.to_string())?;
     Ok(next)
@@ -164,6 +167,43 @@ fn stop_audio(s: State<App>) {
 #[tauri::command]
 fn audio_status(s: State<App>) -> audio::Status {
     s.audio.status()
+}
+#[tauri::command]
+fn experiment_status(s: State<App>) -> experiment::Status {
+    s.experiment.status(&s.dir)
+}
+#[tauri::command]
+fn start_experiment_server(
+    app: tauri::AppHandle,
+    s: State<App>,
+    port: u16,
+) -> Result<experiment::Status, String> {
+    s.experiment.start(app, port)
+}
+#[tauri::command]
+fn stop_experiment_server(app: tauri::AppHandle, s: State<App>) -> experiment::Status {
+    s.experiment.stop_server(&app)
+}
+#[tauri::command]
+fn prepare_experiment(
+    app: tauri::AppHandle,
+    s: State<App>,
+    target: String,
+) -> Result<serde_json::Value, String> {
+    s.experiment.prepare(&app, &target)
+}
+#[tauri::command]
+fn play_experiment_test(
+    app: tauri::AppHandle,
+    s: State<App>,
+    trial_id: String,
+    delay_ms: u64,
+) -> Result<serde_json::Value, String> {
+    s.experiment.play(&app, &trial_id, delay_ms)
+}
+#[tauri::command]
+fn stop_experiment_trial(app: tauri::AppHandle, s: State<App>) -> serde_json::Value {
+    s.experiment.stop_trial(&app, None)
 }
 #[tauri::command]
 fn set_preview_level(s: State<App>, db: f64) -> Result<(), String> {
@@ -498,6 +538,7 @@ fn main() {
         .manage(App {
             project: Mutex::new(project),
             audio: audio::Audio::new(),
+            experiment: experiment::Runtime::new(),
             dir,
             startup_error: startup_issue,
         })
@@ -521,6 +562,12 @@ fn main() {
             preview_timeline,
             stop_audio,
             audio_status,
+            experiment_status,
+            start_experiment_server,
+            stop_experiment_server,
+            prepare_experiment,
+            play_experiment_test,
+            stop_experiment_trial,
             set_preview_level,
             project_file,
             export_wav,
@@ -529,6 +576,7 @@ fn main() {
         .on_window_event(|w, e| {
             if let tauri::WindowEvent::CloseRequested { .. } = e {
                 w.state::<App>().audio.stop();
+                w.state::<App>().experiment.stop_server(w.app_handle());
                 w.app_handle().exit(0);
             }
         })
