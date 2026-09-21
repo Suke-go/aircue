@@ -1,0 +1,98 @@
+name: Windows build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: 1.95.0
+          components: rustfmt
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          workspaces: '. -> target'
+      - name: Install Tauri CLI
+        run: npm ci
+      - name: Set up ASIO
+        run: ./tools/setup-asio.ps1
+      - name: Check versions and frontend
+        run: npm run check
+      - name: Check Rust formatting
+        run: cargo fmt --check
+      - name: Test audio engine and storage
+        run: cargo test --locked --features asio
+      - name: Build Windows installer
+        run: npm run tauri -- build --bundles nsis --features asio -- --locked
+      - name: Package application and corresponding source
+        run: ./tools/package-release.ps1 -WithSource
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: AirCue-windows-x64
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: AirCue-windows-x64
+          path: dist
+      - name: Publish private repository release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          Windows x64 / ASIO・WASAPI対応。
+
+          - `*-setup.exe`: インストーラー
+          - `*-windows-x64.zip`: 展開して AirCue.exe を起動
+          - `*-source.tar.gz`: 同じビルドのソース、Rust依存ソース、ASIO SDK
+          - `SHA256SUMS.txt`: ファイルの確認用ハッシュ
+
+          このリポジトリにアクセスできる関係者向けの配布です。コード署名は未設定です。
+          EOF
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --title "AirCue $RELEASE_TAG" --notes-file release-notes.md
+          fi
