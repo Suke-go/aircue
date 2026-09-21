@@ -96,6 +96,9 @@ struct Request {
 }
 
 impl Runtime {
+    pub fn is_running(&self) -> bool {
+        self.state.lock().unwrap().running
+    }
     pub fn new() -> Self {
         Self {
             state: Mutex::new(State {
@@ -203,6 +206,8 @@ impl Runtime {
     }
 
     pub fn prepare(&self, app: &AppHandle, target: &str) -> Result<Value, String> {
+        let app_state = app.state::<App>();
+        let _idle = app_state.study.idle()?;
         if !self.state.lock().unwrap().running {
             return Err("先に実験連携を開始してください".into());
         }
@@ -283,6 +288,8 @@ impl Runtime {
     }
 
     pub fn play(&self, app: &AppHandle, trial_id: &str, delay_ms: u64) -> Result<Value, String> {
+        let app_state = app.state::<App>();
+        let _idle = app_state.study.idle()?;
         validate_id(trial_id, "trialId")?;
         if !(50..=5000).contains(&delay_ms) {
             return Err("delayMsは50〜5000 msで指定してください".into());
@@ -330,7 +337,13 @@ impl Runtime {
         }))
     }
 
-    pub fn stop_trial(&self, app: &AppHandle, requested_trial: Option<&str>) -> Value {
+    pub fn stop_trial(
+        &self,
+        app: &AppHandle,
+        requested_trial: Option<&str>,
+    ) -> Result<Value, String> {
+        let app_state = app.state::<App>();
+        let _idle = app_state.study.idle()?;
         app.state::<App>().audio.stop();
         let trial = self.state.lock().unwrap().active_trial_id.take();
         self.record(
@@ -343,7 +356,7 @@ impl Runtime {
             None,
             None,
         );
-        json!({"type":"stopped","trialId":trial})
+        Ok(json!({"type":"stopped","trialId":trial}))
     }
 
     fn record(
@@ -508,7 +521,7 @@ fn handle_request(app: &AppHandle, request: Request) -> Value {
             request.trial_id.as_deref().unwrap_or(""),
             request.delay_ms.unwrap_or(100),
         ),
-        "stop" => Ok(runtime.stop_trial(app, request.trial_id.as_deref())),
+        "stop" => runtime.stop_trial(app, request.trial_id.as_deref()),
         _ => Err("unknownCommand".into()),
     };
     match result {

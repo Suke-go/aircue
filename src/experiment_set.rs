@@ -364,15 +364,32 @@ pub fn validate(manifest: &Manifest) -> Result<(), String> {
         manifest.device_info.clone(),
         manifest.media_hashes.clone(),
     )?;
-    if serde_json::to_value(regenerated).map_err(|e| e.to_string())?
-        != serde_json::to_value(manifest).map_err(|e| e.to_string())?
-    {
+    if !json_equivalent(
+        &serde_json::to_value(regenerated).map_err(|e| e.to_string())?,
+        &serde_json::to_value(manifest).map_err(|e| e.to_string())?,
+    ) {
         return Err(
             "実験manifestのハッシュ、刺激情報、試行順が一致しません。因子表から再生成してください"
                 .into(),
         );
     }
     Ok(())
+}
+// JS JSON.stringify writes 200.0 as 200. Untyped stimulus metadata must use
+// JSON numeric equality, while keys, strings, arrays and frozen hashes stay exact.
+fn json_equivalent(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Number(a), Value::Number(b)) => a.as_f64() == b.as_f64(),
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| json_equivalent(a, b))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(k, v)| b.get(k).is_some_and(|b| json_equivalent(v, b)))
+        }
+        _ => a == b,
+    }
 }
 pub fn load(path: &Path) -> Result<Manifest, String> {
     if std::fs::metadata(path).map_err(|e| e.to_string())?.len() > 8 * 1024 * 1024 {
@@ -389,10 +406,31 @@ pub fn export(
     source: &Path,
     destination: &Path,
 ) -> Result<PathBuf, String> {
+    export_with_adapter(m, current, source, destination, false)
+}
+pub fn export_with_adapter(
+    m: &Manifest,
+    current: &Project,
+    source: &Path,
+    destination: &Path,
+    unity: bool,
+) -> Result<PathBuf, String> {
+    validate_current(m, current, source)?;
+    export_validated(m, source, destination, unity)
+}
+pub fn validate_current(m: &Manifest, current: &Project, source: &Path) -> Result<(), String> {
     validate(m)?;
     if hash(current)? != m.project_hash || media_hashes(current, source)? != m.media_hashes {
         return Err("プロジェクトが変更されました。実験セットを再生成してください".into());
     }
+    Ok(())
+}
+fn export_validated(
+    m: &Manifest,
+    source: &Path,
+    destination: &Path,
+    unity: bool,
+) -> Result<PathBuf, String> {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| e.to_string())?
@@ -400,19 +438,44 @@ pub fn export(
     let root = destination.join(format!("AirCue-Experiment-{stamp}"));
     std::fs::create_dir(&root).map_err(|e| e.to_string())?;
     let result = (|| {
+        let package = if unity {
+            root.join("AirCueUnity")
+        } else {
+            root.clone()
+        };
+        let write = |p: &Project, samples: &[f32], id: &str| {
+            if unity {
+                unity_export::write_package(p, samples, &root, id)
+            } else {
+                crate::stimulus_export::write_sequence(
+                    p,
+                    samples,
+                    &package.join(format!("Sequences/Sequence-{id}")),
+                )
+            }
+        };
         let mut checksums = vec![];
         for c in &m.plan.conditions {
             let p = stimulus(&m.project, c)?;
             let rendered = auditory::render_project(&p, source, "all")?;
-            unity_export::write_package(&p, &rendered, &root, &c.id)?;
+            write(&p, &rendered, &c.id)?;
             let relative = format!("Sequences/Sequence-{}/routed-4ch.wav", c.id);
-            checksums.push(json!({"stimulusId":c.id,"routedWavSha256":format!("{:x}",Sha256::digest(std::fs::read(root.join("AirCueUnity").join(relative)).map_err(|e|e.to_string())?))}));
+            checksums.push(json!({"stimulusId":c.id,"routedWavSha256":format!("{:x}",Sha256::digest(std::fs::read(package.join(relative)).map_err(|e|e.to_string())?))}));
         }
         for index in 0..4 {
             let (cue, rendered) = calibration(&m.project, source, index)?;
-            unity_export::write_package(&cue, &rendered, &root, &format!("calibration-{index}"))?;
+            write(&cue, &rendered, &format!("calibration-{index}"))?;
         }
-        let package = root.join("AirCueUnity");
+        std::fs::write(
+            package.join("BUNDLE.md"),
+            include_str!("../docs/EXPERIMENT_BUNDLE.md"),
+        )
+        .map_err(|e| e.to_string())?;
+        std::fs::write(
+            package.join("THIRD_PARTY_HRTF.txt"),
+            include_str!("../THIRD_PARTY_HRTF.txt"),
+        )
+        .map_err(|e| e.to_string())?;
         std::fs::write(
             package.join("Experiment.aircueexp"),
             serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?,
@@ -434,6 +497,57 @@ pub fn export(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn browser_integer_number_roundtrip_preserves_manifest_validation() {
+        fn js_numbers(v: &mut Value) {
+            match v {
+                Value::Number(n) => {
+                    if let Some(f) = n.as_f64() {
+                        if f.fract() == 0. && f.abs() <= 9_007_199_254_740_991. {
+                            *v = json!(f as i64);
+                        }
+                    }
+                }
+                Value::Array(a) => a.iter_mut().for_each(js_numbers),
+                Value::Object(o) => o.values_mut().for_each(js_numbers),
+                _ => {}
+            }
+        }
+        let m = generate(&base(), plan("modality"), Value::Null, Path::new(".")).unwrap();
+        let mut value = serde_json::to_value(&m).unwrap();
+        js_numbers(&mut value);
+        let m: Manifest = serde_json::from_value(value).unwrap();
+        validate(&m).unwrap();
+        let mut bad = m;
+        bad.stimuli[0]["routing"][0] = json!(99);
+        assert!(validate(&bad).is_err());
+    }
+    #[test]
+    fn optional_unity_adapter_preserves_the_neutral_manifest_and_pcm() {
+        let root =
+            std::env::temp_dir().join(format!("aircue-adapter-parity-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let p = base();
+        let m = generate(&p, plan("modality"), Value::Null, &root).unwrap();
+        let neutral = export(&m, &p, &root, &root).unwrap();
+        let adapted = export_with_adapter(&m, &p, &root, &root, true)
+            .unwrap()
+            .join("AirCueUnity");
+        assert!(adapted.join("Runtime/AirCueExperimentRunner.cs").exists());
+        assert!(!neutral.join("Runtime").exists());
+        for relative in [
+            "Experiment.aircueexp",
+            "checksums.json",
+            "Sequences/Sequence-c01/routed-4ch.wav",
+            "Sequences/Sequence-calibration-3/routed-4ch.wav",
+        ] {
+            assert_eq!(
+                std::fs::read(neutral.join(relative)).unwrap(),
+                std::fs::read(adapted.join(relative)).unwrap()
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn altered_media_and_clipping_do_not_leave_partial_exports() {
         let root = std::env::temp_dir().join(format!("aircue-frozen-media-{}", std::process::id()));
@@ -471,7 +585,10 @@ mod tests {
         let base = base();
         let manifest = generate(&base, plan("onset"), Value::Null, &root).unwrap();
         let output = export(&manifest, &base, &root, &root).unwrap();
-        let package = output.join("AirCueUnity");
+        let package = output.clone();
+        assert!(!package.join("AirCueUnity").exists());
+        assert!(!package.join("Runtime").exists());
+        assert!(package.join("BUNDLE.md").exists());
         validate(&load(&package.join("Experiment.aircueexp")).unwrap()).unwrap();
         for c in &manifest.plan.conditions {
             let samples: Vec<i32> = hound::WavReader::open(

@@ -1,5 +1,14 @@
 # AirCue 0.6.0 verification
 
+## Follow-up: experiments without Unity
+
+- Standard Experiment Bundle now contains plain JSON and WAV, with no Unity runtime/editor files. Unity is an explicit optional adapter. Both exports use one PCM/metadata writer; a parity test checks identical manifests, checksums and condition/calibration WAVs.
+- Added AirCue-native participant sessions, four-channel calibration gate, primary responses followed by ratings, aborts, durable JSONL and exclusive access to project edits/audio playback. The native runner uses software frame-progress estimates, not physical onset timestamps.
+- ASIO-enabled Rust: 44 tests passed. Added browser integer/float JSON roundtrip regression, adapter parity, response timing before ratings, duplicate/early answer rejection, interrupted playback and log-write failure tests. JavaScript: 20 tests and syntax/version checks passed.
+- Native Windows UI with isolated data: standard WAV/JSON export and optional Unity section, 6-condition/24-trial generation, and participant selection were exercised. A native manifest roundtrip failure was found and corrected: JavaScript serializes integral floating values as integers; validation now compares JSON numbers numerically while retaining exact hashes, fields and order.
+- Full audible trial/response sessions and physical four-channel output remain untested. No Python/PsychoPy-specific execution adapter is included. Native sessions do not resume after interruption; a new session starts at the first trial.
+- Final ASIO-enabled release/NSIS build succeeded. The built CLI exported a neutral 24-trial bundle successfully. After the JSON fix, the native generated manifest passed validation and reached the expected missing-four-channel-device gate without playback.
+
 - Baseline: private repository main and v0.5.0 at 4c0edf3a2444d1f48980ccd068a7a45638212c16.
 - Windows MSVC: 39 Rust tests passed with ASIO enabled. New coverage includes deterministic participant/block orders and repetitions, signed onsets, routing and gain transformations, strict manifest roundtrip and tampering rejection, case-insensitive condition IDs, frozen media rejection, clipping cleanup, actual exported PCM and single-channel calibration.
 - JavaScript: 20 tests passed, including all simple presets, non-destructive custom recognition, a short custom path deviation, legacy long-arc rotation across the seam, distance limits, source preservation and A/B copies. Syntax and version checks passed.

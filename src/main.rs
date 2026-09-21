@@ -4,6 +4,8 @@ mod auditory;
 mod experiment;
 mod experiment_set;
 mod model;
+mod stimulus_export;
+mod study;
 mod unity_export;
 use model::{Clip, Project, Settings, Wave};
 use std::{path::PathBuf, sync::Mutex};
@@ -13,6 +15,7 @@ struct App {
     project: Mutex<Project>,
     audio: audio::Audio,
     experiment: experiment::Runtime,
+    study: study::Runtime,
     dir: PathBuf,
     startup_error: Option<String>,
 }
@@ -35,6 +38,7 @@ fn change(
     s: &App,
     f: impl FnOnce(&mut Project),
 ) -> Result<Project, String> {
+    let _idle = s.study.idle()?;
     let mut locked = s.project.lock().map_err(|e| e.to_string())?;
     let mut next = locked.clone();
     f(&mut next);
@@ -91,8 +95,10 @@ fn update_settings(
     s: State<App>,
     settings: Settings,
 ) -> Result<Project, String> {
-    s.audio.stop();
-    change(&app, &s, |p| p.settings = settings)
+    change(&app, &s, |p| {
+        s.audio.stop();
+        p.settings = settings;
+    })
 }
 #[tauri::command]
 async fn list_devices() -> Result<Vec<audio::DeviceInfo>, String> {
@@ -104,6 +110,7 @@ async fn list_devices() -> Result<Vec<audio::DeviceInfo>, String> {
 async fn preview_wave(app: tauri::AppHandle, wave: Wave) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let s = app.state::<App>();
+        let _idle = s.study.idle()?;
         let settings = s.project.lock().unwrap().settings.clone();
         let device = settings
             .device_id
@@ -130,6 +137,7 @@ async fn preview_wave(app: tauri::AppHandle, wave: Wave) -> Result<(), String> {
 async fn preview_timeline(app: tauri::AppHandle, target: Option<String>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let s = app.state::<App>();
+        let _idle = s.study.idle()?;
         let p = s.project.lock().unwrap().clone();
         if p.clips.is_empty() && p.audio_clips.is_empty() {
             return Err("波形をタイムラインに配置してください".into());
@@ -162,11 +170,12 @@ async fn preview_timeline(app: tauri::AppHandle, target: Option<String>) -> Resu
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
-fn stop_audio(s: State<App>) {
-    s.audio.stop()
+fn stop_audio(s: State<App>) -> Result<(), String> {
+    s.study.end(&s.audio, "stopRequested")
 }
 #[tauri::command]
 fn audio_status(s: State<App>) -> audio::Status {
+    s.study.tick(&s.audio);
     s.audio.status()
 }
 #[tauri::command]
@@ -179,11 +188,16 @@ fn start_experiment_server(
     s: State<App>,
     port: u16,
 ) -> Result<experiment::Status, String> {
+    let _idle = s.study.idle()?;
     s.experiment.start(app, port)
 }
 #[tauri::command]
-fn stop_experiment_server(app: tauri::AppHandle, s: State<App>) -> experiment::Status {
-    s.experiment.stop_server(&app)
+fn stop_experiment_server(
+    app: tauri::AppHandle,
+    s: State<App>,
+) -> Result<experiment::Status, String> {
+    let _idle = s.study.idle()?;
+    Ok(s.experiment.stop_server(&app))
 }
 #[tauri::command]
 fn prepare_experiment(
@@ -203,7 +217,10 @@ fn play_experiment_test(
     s.experiment.play(&app, &trial_id, delay_ms)
 }
 #[tauri::command]
-fn stop_experiment_trial(app: tauri::AppHandle, s: State<App>) -> serde_json::Value {
+fn stop_experiment_trial(
+    app: tauri::AppHandle,
+    s: State<App>,
+) -> Result<serde_json::Value, String> {
     s.experiment.stop_trial(&app, None)
 }
 #[tauri::command]
@@ -271,6 +288,7 @@ async fn experiment_manifest_file(
 async fn export_experiment_set(
     app: tauri::AppHandle,
     manifest: experiment_set::Manifest,
+    unity: Option<bool>,
 ) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let s = app.state::<App>();
@@ -278,11 +296,12 @@ async fn export_experiment_set(
         let Some(folder) = app.dialog().file().blocking_pick_folder() else {
             return Ok(None);
         };
-        experiment_set::export(
+        experiment_set::export_with_adapter(
             &manifest,
             &p,
             &s.dir,
             &folder.into_path().map_err(|e| e.to_string())?,
+            unity.unwrap_or(false),
         )
         .map(|p| Some(p.display().to_string()))
     })
@@ -302,6 +321,7 @@ async fn preview_calibration(
             return Err("左右と刺激を指定してください".into());
         }
         let s = app.state::<App>();
+        let _idle = s.study.idle()?;
         let p = s.project.lock().unwrap().clone();
         let device = p
             .settings
@@ -331,6 +351,7 @@ async fn preview_calibration(
 }
 #[tauri::command]
 fn set_preview_level(s: State<App>, db: f64) -> Result<(), String> {
+    let _idle = s.study.idle()?;
     s.audio.set_level(db)
 }
 #[tauri::command]
@@ -359,8 +380,10 @@ async fn project_file(app: tauri::AppHandle, load: bool) -> Result<Option<String
             p.ensure_presets();
             auditory::copy_assets(&p, &path.with_extension("media"), &s.dir)?;
             p.settings.device_id = None;
-            s.audio.stop();
-            change(&app, &s, |old| *old = p)?;
+            change(&app, &s, |old| {
+                s.audio.stop();
+                *old = p;
+            })?;
         } else {
             let p = s.project.lock().unwrap();
             auditory::copy_assets(&p, &s.dir, &path.with_extension("media"))?;
@@ -474,6 +497,7 @@ async fn preview_audio(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let s = app.state::<App>();
+        let _idle = s.study.idle()?;
         let p = s.project.lock().unwrap().clone();
         let device = p
             .settings
@@ -503,6 +527,7 @@ async fn update_audio_preview(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let s = app.state::<App>();
+        let _idle = s.study.idle()?;
         let status = s.audio.status();
         if !status.playing || status.mode != "audio" {
             return Ok(());
@@ -589,7 +614,7 @@ fn main() {
     }
     if matches!(
         args.get(1).map(String::as_str),
-        Some("--export-unity" | "--export-experiment")
+        Some("--export-unity" | "--export-experiment" | "--export-experiment-unity")
     ) {
         let result = (|| -> Result<PathBuf, String> {
             let file = PathBuf::from(
@@ -608,7 +633,7 @@ fn main() {
             } else {
                 file.parent().unwrap().to_path_buf()
             };
-            if args[1] == "--export-experiment" {
+            if args[1].starts_with("--export-experiment") {
                 let template = args.get(4).map(String::as_str).unwrap_or("modality");
                 let plan = experiment_set::Plan {
                     template: template.into(),
@@ -622,7 +647,17 @@ fn main() {
                 };
                 let manifest =
                     experiment_set::generate(&project, plan, serde_json::Value::Null, &media)?;
-                experiment_set::export(&manifest, &project, &media, &destination)
+                if args[1] == "--export-experiment-unity" {
+                    experiment_set::export_with_adapter(
+                        &manifest,
+                        &project,
+                        &media,
+                        &destination,
+                        true,
+                    )
+                } else {
+                    experiment_set::export(&manifest, &project, &media, &destination)
+                }
             } else {
                 unity_export::export(&project, &media, &destination)
             }
@@ -683,10 +718,14 @@ fn main() {
             project: Mutex::new(project),
             audio: audio::Audio::new(),
             experiment: experiment::Runtime::new(),
+            study: study::Runtime::default(),
             dir,
             startup_error: startup_issue,
         })
         .invoke_handler(tauri::generate_handler![
+            study::start_study,
+            study::study_status,
+            study::study_action,
             experiment_template,
             generate_experiment_set,
             experiment_manifest_file,
@@ -724,6 +763,10 @@ fn main() {
         ])
         .on_window_event(|w, e| {
             if let tauri::WindowEvent::CloseRequested { .. } = e {
+                let state = w.state::<App>();
+                if let Err(e) = state.study.end(&state.audio, "windowClosed") {
+                    eprintln!("{e}");
+                }
                 w.state::<App>().audio.stop();
                 w.state::<App>().experiment.stop_server(w.app_handle());
                 w.app_handle().exit(0);

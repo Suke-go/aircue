@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "tauri": "tauri",
-    "check": "node --check web/app.js && node --check web/auditory.js && node --check web/spatial.js && node --check web/simple-spatial.js && node --check web/spatial-editor.js && node --check web/experiment.js && node --check web/experiment-set.js && node --test tests/*.test.cjs && node tools/check-version.cjs"
+    "check": "node --check web/app.js && node --check web/auditory.js && node --check web/spatial.js && node --check web/simple-spatial.js && node --check web/spatial-editor.js && node --check web/experiment.js && node --check web/experiment-set.js && node --check web/study.js && node --test tests/*.test.cjs && node tools/check-version.cjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.5"
