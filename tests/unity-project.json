@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "draft": {
+    "id": "single",
+    "name": "Pulse",
+    "parts": [
+      {
+        "kind": "push",
+        "startMs": 0,
+        "amplitude": 100,
+        "frequency": 40,
+        "cycles": 2,
+        "pushMs": 12,
+        "returnMs": 48,
+        "widthMs": 20,
+        "polarity": 1
+      }
+    ],
+    "levelDb": -18
+  },
+  "waves": [
+    {
+      "id": "single",
+      "name": "Pulse",
+      "parts": [
+        {
+          "kind": "push",
+          "startMs": 0,
+          "amplitude": 100,
+          "frequency": 40,
+          "cycles": 2,
+          "pushMs": 12,
+          "returnMs": 48,
+          "widthMs": 20,
+          "polarity": 1
+        }
+      ],
+      "levelDb": -18
+    }
+  ],
+  "clips": [
+    {
+      "id": "air",
+      "waveId": "single",
+      "lane": "left",
+      "startMs": 100,
+      "gainDb": 0
+    }
+  ],
+  "durationMs": 200,
+  "settings": {
+    "deviceId": null,
+    "routing": [
+      3,
+      4,
+      2,
+      1
+    ],
+    "distanceCm": [
+      30,
+      30
+    ],
+    "previewLane": "left"
+  },
+  "audioAssets": [],
+  "audioClips": [
+    {
+      "id": "audio",
+      "name": "Right-side noise",
+      "startMs": 20,
+      "gainDb": -3,
+      "design": {
+        "source": "noise",
+        "assetId": null,
+        "frequency": 440,
+        "endFrequency": 4000,
+        "offsetMs": 0,
+        "durationMs": 100,
+        "levelDb": -24,
+        "spatial": true,
+        "azimuth": 90,
+        "elevation": 0,
+        "distanceM": 1,
+        "motion": "fixed",
+        "speed": 45,
+        "endAzimuth": 90,
+        "keyframes": []
+      }
+    }
+  ],
+  "audioDraft": {
+    "source": "noise",
+    "assetId": null,
+    "frequency": 440,
+    "endFrequency": 4000,
+    "offsetMs": 0,
+    "durationMs": 100,
+    "levelDb": -24,
+    "spatial": true,
+    "azimuth": 90,
+    "elevation": 0,
+    "distanceM": 1,
+    "motion": "fixed",
+    "speed": 45,
+    "endAzimuth": 90,
+    "keyframes": []
+  }
+}

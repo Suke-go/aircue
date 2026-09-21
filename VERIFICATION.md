@@ -1,11 +1,10 @@
-# AirCue 0.3.0 verification
+# AirCue 0.4.0 verification
 
-- Windows MSVC / Rust 1.95.0 / ASIO enabled: 28 Rust unit tests passed.
-- JavaScript: 10 spatial-model tests passed; all four production scripts passed syntax checks; application and lockfile versions agree.
-- Shared fixtures compare JavaScript and Rust positions across the rear seam, intermediate points, orbit, legacy angular sweep and the exact half-turn case.
-- Rust tests also cover path validation and old-project compatibility, rendered distance attenuation, stereo bypass, import/trim, portable assets, routing, waveform synthesis and gain limits.
-- Frontend checked in a hidden browser using an isolated Tauri command adapter: spatial presets, point insertion, map drag, keyboard entry of passage time, timeline insertion, clip duplication, clip update/reopen, persisted paths, spatial bypass and file-trim duration clamping.
-- The UI adapter is test-only and is not included in the application. It does not verify native audio playback or the native file dialog.
-- Local ASIO release and NSIS installer compiled successfully. The canonical AirCue.exe reports version 0.3.0. A silent native diagnostics launch succeeded with ASIO support enabled and available WASAPI devices listed.
-- Native file dialog interaction, acoustic localization, Rubix44 simultaneous four-channel playback and physical air-puff strength were not verified in this release session.
-- GitHub Actions runs Rust and JavaScript tests, version checks, NSIS packaging and corresponding-source packaging before publishing a tag release. Run results are recorded in GitHub Actions.
+- Windows MSVC / Rust 1.95.0 / ASIO enabled: 30 Rust unit tests passed.
+- JavaScript: 13 spatial-model/history tests passed; syntax and version checks passed.
+- New coverage includes path mirroring/reversal, equal timing and loop closure, independent undo/redo snapshots, Unity WAV channel extraction and shared frame timing, and rejection of invalid exports.
+- Browser UI checked using an isolated command adapter: mirror, undo/redo, dragging a height/time point, undoing the complete drag, timeline placement and Unity export instructions. No browser console errors were reported. This adapter is not shipped.
+- Unity 6000.4.3f1: the actual Rust CLI export of tests/unity-project.json was imported in an isolated project. C# compilation, prefab and subasset generation, PCM channel equality, start frames, routing permutation and reimport references passed. The batch exited with code 0 and AIRCUE_UNITY_VERIFIED in its log.
+- Unity verification code: unity/Tests/Editor/AirCueImportVerification.cs. It is not included in exported folders. GitHub CI does not run Unity because no Unity license is configured there.
+- Native playback, acoustic localization, Rubix44 four-channel physical output, driver downmix behavior and physical air-puff strength were not verified. Unity imports and audio sample content were verified without playing sound.
+- GitHub Actions runs Rust and JavaScript tests, version checks, NSIS packaging and corresponding-source packaging before publishing the tag release.

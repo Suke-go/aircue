@@ -29,3 +29,28 @@ test('duration changes preserve normalized path positions',()=>{
 test('converting legacy sweep to a path preserves its midpoint',()=>{
   const d={...structuredClone(base),motion:'sweep',azimuth:-90,endAzimuth:90};const middle=Spatial.pose(d,.5);Spatial.ensurePath(d);assert.deepEqual(Spatial.pose(d,.5),middle);
 });
+test('mirror and reverse preserve the trajectory under the corresponding transform',()=>{
+  for(const id of ['above','approach','orbit']) {
+    const d=structuredClone(base);Spatial.applyPreset(d,id);const original=structuredClone(d);
+    Spatial.transform(d,'mirror');
+    for(const t of [0,.2,.7,1]) assert.equal(Spatial.pose(d,t).azimuth,Spatial.wrap(-Spatial.pose(original,t).azimuth));
+    Spatial.transform(d,'mirror');Spatial.transform(d,'reverse');
+    for(const t of [0,.2,.7,1]) {
+      const a=Spatial.pose(d,t),b=Spatial.pose(original,1-t);
+      for(const k of ['azimuth','elevation','distanceM'])assert.ok(Math.abs(a[k]-b[k])<1e-8);
+    }
+  }
+});
+test('spacing and loop closure leave the source and gain unchanged',()=>{
+  const d=structuredClone(base);Spatial.applyPreset(d,'above');d.keyframes[1].at=.2;
+  Spatial.transform(d,'space');assert.equal(d.keyframes[1].at,.5);
+  Spatial.transform(d,'close');assert.deepEqual({...d.keyframes[2],at:0},d.keyframes[0]);
+  assert.equal(d.source,base.source);assert.equal(d.levelDb,base.levelDb);
+});
+test('history supports independent snapshots, redo and branching',()=>{
+  const h=Spatial.history(2),d=structuredClone(base);h.reset(d);
+  d.azimuth=45;h.record(d);d.azimuth=90;h.record(d);
+  const undo=h.undo();assert.equal(undo.azimuth,45);undo.azimuth=100;
+  assert.equal(h.redo().azimuth,90);assert.equal(h.undo().azimuth,45);
+  h.record({...d,azimuth:-90});assert.equal(h.canRedo,false);assert.equal(h.undo().azimuth,45);
+});

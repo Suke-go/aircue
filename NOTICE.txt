@@ -1,4 +1,4 @@
-AirCue 0.3.0
+AirCue 0.4.0
 Copyright (C) 2026 AirCue contributors.
 
 AirCue is distributed under GNU GPL version 3 only. See LICENSE.

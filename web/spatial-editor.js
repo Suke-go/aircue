@@ -15,11 +15,12 @@ function spatialEditorMarkup(d) {
     <div ${d.spatial?'':'inert'} class="au-spatialbody ${d.spatial?'':'au-disabled'}"><div class="au-mapwrap">
       <div id="audio-map-control" tabindex="0" role="group" aria-label="音源位置。ドラッグで移動、左右キーで方位、上下キーで距離を調整"><svg id="audio-map" viewBox="0 0 400 400" role="img" aria-label="音源と経路"></svg></div>
       <div class="aw-sub au-center">前 0° · 右 ＋90°</div>
-      <svg id="audio-elevation-map" viewBox="0 0 400 100" role="img" aria-label="経路の高さ"></svg>
+      <div id="audio-height-control" tabindex="0" role="group" aria-label="通過点の時刻と高さ。ドラッグで編集"><svg id="audio-elevation-map" viewBox="0 0 400 140" role="img" aria-label="経路の高さ"></svg></div>
       <div class="au-scrub"><label for="audio-inspect">経路の確認 <output id="audio-inspect-value"></output></label><input id="audio-inspect" type="range" min="0" max="${d.durationMs}" step="any" value="${audioInspectMs}" aria-label="経路の確認時刻"><div id="audio-position-readout" class="aw-sub"></div></div>
     </div><div class="au-spatialcontrols"><label class="au-motion-label">移動<select id="audio-motion" aria-label="音源の移動">${[['fixed','固定'],['orbit','周回'],['sweep','指定位置まで移動'],['path','経路を編集']].map(([id,name])=>`<option value="${id}" ${d.motion===id?'selected':''}>${name}</option>`).join('')}</select></label>
-      ${d.motion==='path'?`<div class="au-path-editor"><div class="aw-row aw-between"><strong>通過点</strong><button id="audio-add-key" ${d.keyframes.length>=32?'disabled':''}>＋ 追加</button></div><div id="audio-key-list">${d.keyframes.map((k,i)=>`<button data-spatial-key="${i}" aria-pressed="${i===audioKeyIndex}" title="${(k.at*d.durationMs).toFixed(1)} ms">${i===0?'開始':i===d.keyframes.length-1?'終了':i}</button>`).join('')}</div><div class="aw-row"><label>時刻 <input id="audio-key-time" aria-label="通過点の時刻" type="number" step="any" value="${+(p.at*d.durationMs).toFixed(3)}" ${audioKeyIndex===0||audioKeyIndex===d.keyframes.length-1?'disabled':''}> ms</label><button id="audio-remove-key" ${audioKeyIndex===0||audioKeyIndex===d.keyframes.length-1?'disabled':''}>削除</button></div><span class="aw-sub">選択した点の位置を調整</span></div>`:''}
-      ${audioRange('方位','azimuth',p.azimuth,-180,180,'any','°')}${audioRange('仰角','elevation',p.elevation,-40,90,'any','°')}${audioRange('距離','distanceM',p.distanceM,.3,5,'any','m')}
+      ${d.motion==='path'?`<div class="au-path-editor"><div class="aw-row aw-between"><strong>通過点</strong><button id="audio-add-key" ${d.keyframes.length>=32?'disabled':''}>＋ 追加</button></div><div id="audio-key-list">${d.keyframes.map((k,i)=>`<button data-spatial-key="${i}" aria-pressed="${i===audioKeyIndex}" title="${(k.at*d.durationMs).toFixed(1)} ms">${i===0?'開始':i===d.keyframes.length-1?'終了':i}</button>`).join('')}</div><div class="aw-row"><label>時刻 <input id="audio-key-time" aria-label="通過点の時刻" type="number" step="any" value="${+(p.at*d.durationMs).toFixed(3)}" ${audioKeyIndex===0||audioKeyIndex===d.keyframes.length-1?'disabled':''}> ms</label><button id="audio-remove-key" ${audioKeyIndex===0||audioKeyIndex===d.keyframes.length-1?'disabled':''}>削除</button></div><span class="aw-sub">図と高さのグラフからも編集できます</span></div>`:''}
+      <div class="au-path-actions"><button data-path-action="mirror">左右反転</button><button data-path-action="reverse">逆順</button>${d.motion==='path'?'<button data-path-action="space">等間隔</button><button data-path-action="close">終点を始点に合わせる</button>':''}</div>
+      ${audioRange('方位' ,'azimuth',p.azimuth,-180,180,'any','°')}${audioRange('仰角','elevation',p.elevation,-40,90,'any','°')}${audioRange('距離','distanceM',p.distanceM,.3,5,'any','m')}
       ${d.motion==='orbit'?audioRange('回転速度','speed',d.speed,-360,360,1,'°/s'):d.motion==='sweep'?audioRange('移動先','endAzimuth',d.endAzimuth,-180,180,1,'°'):''}
     </div></div><p id="audio-spatial-note" class="aw-sub">${d.spatial?'ステレオ素材は左右を合成し、1つの音源として定位させます。':'立体音響オフ · 元の左右を保持して再生します。'}</p><p class="aw-sub">距離は1 mより遠い範囲で音量に反映 · HRTF: MIT KEMAR / Bill Gardner, Keith Martin</p></section>`;
 }
@@ -51,6 +52,7 @@ function bindSpatialEditor() {
   $('#audio-spatial').onchange=()=>attempt(async()=>{audioDesign.spatial=$('#audio-spatial').checked;audioRevision++;await flushAudioDraft();audioEditor()});
   $('#audio-motion').onchange=()=>attempt(async()=>{const mode=$('#audio-motion').value;if(mode==='path')Spatial.ensurePath(audioDesign);else audioDesign.motion=mode;audioKeyIndex=0;audioInspectMs=0;audioRevision++;await flushAudioDraft();audioEditor()});
   $('#spatial-preset').onchange=()=>attempt(async()=>{const id=$('#spatial-preset').value;if(!id)return;Spatial.applyPreset(audioDesign,id);audioKeyIndex=0;audioInspectMs=0;audioRevision++;await flushAudioDraft();audioEditor()});
+  $$('[data-path-action]').forEach(b=>b.onclick=()=>attempt(async()=>{await flushAudioDraft();Spatial.transform(audioDesign,b.dataset.pathAction);audioKeyIndex=0;audioInspectMs=0;audioRevision++;await flushAudioDraft();audioEditor()}));
   $('#audio-inspect').oninput=()=>{audioInspectMs=+$('#audio-inspect').value;drawAudioPosition()};
   $$('[data-spatial-key]').forEach(b=>b.onclick=()=>attempt(()=>selectSpatialKey(+b.dataset.spatialKey)));
   if ($('#audio-add-key')) {
@@ -61,7 +63,7 @@ function bindSpatialEditor() {
   const map=$('#audio-map-control');
   const selectInMap=index=>{
     audioKeyIndex=index;audioInspectMs=editingPose().at*audioDesign.durationMs;
-    $$('[data-spatial-key]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.spatialKey===index));
+    $$('[data-spatial-key]').forEach(b=>{b.setAttribute('aria-pressed',+b.dataset.spatialKey===index);b.title=(audioDesign.keyframes[+b.dataset.spatialKey].at*audioDesign.durationMs).toFixed(1)+' ms'});
     for(const key of spatialKeys)$$(`[data-audio-param="${key}"]`).forEach(el=>el.value=editingPose()[key]);
     $('#audio-key-time').value=+(editingPose().at*audioDesign.durationMs).toFixed(3);
     const endpoint=index===0||index===audioDesign.keyframes.length-1;
@@ -85,8 +87,34 @@ function bindSpatialEditor() {
     if(nearest<0)update(e);else drawAudioPosition();
   };
   map.onpointermove=update;
-  const end=()=>{audioPointerEditing=false;attempt(flushAudioDraft)};
-  map.onpointerup=end;map.onpointercancel=end;
+  const end=()=>{if(!audioPointerEditing)return;audioPointerEditing=false;attempt(flushAudioDraft)};
+  map.onpointerup=end;map.onpointercancel=end;map.onlostpointercapture=end;
+  const height=$('#audio-height-control');
+  let heightEditing=false;
+  const updateHeight=e=>{
+    if(!heightEditing)return;
+    const r=height.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*400,y=(e.clientY-r.top)/r.height*140;
+    const keys=audioDesign.keyframes,i=audioKeyIndex,p=keys[i];
+    p.elevation=Math.round(Math.max(-40,Math.min(90,(100-y)/.8)));
+    if(i>0&&i<keys.length-1)p.at=Math.max(keys[i-1].at+.001,Math.min(keys[i+1].at-.001,(x-20)/360));
+    selectInMap(i);queueAudioEdit();drawAudioPosition();
+  };
+  height.onpointerdown=e=>{
+    if(!audioDesign.spatial||audioDesign.motion!=='path')return;
+    const r=height.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*400;
+    let index=0;audioDesign.keyframes.forEach((k,i)=>{if(Math.abs(20+k.at*360-x)<Math.abs(20+audioDesign.keyframes[index].at*360-x))index=i});
+    selectInMap(index);heightEditing=true;audioPointerEditing=true;height.setPointerCapture(e.pointerId);updateHeight(e);
+  };
+  height.onpointermove=updateHeight;
+  height.onpointerup=height.onpointercancel=()=>{if(!heightEditing)return;heightEditing=false;audioPointerEditing=false;attempt(flushAudioDraft)};
+  height.onlostpointercapture=height.onpointerup;
+  height.onkeydown=e=>{
+    if(!audioDesign.spatial||audioDesign.motion!=='path'||!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))return;
+    e.preventDefault();const p=editingPose(),keys=audioDesign.keyframes,i=audioKeyIndex;
+    if(e.key==='ArrowUp'||e.key==='ArrowDown')p.elevation=Math.max(-40,Math.min(90,p.elevation+(e.key==='ArrowUp'?1:-1)));
+    else if(i>0&&i<keys.length-1)p.at=Math.max(keys[i-1].at+.001,Math.min(keys[i+1].at-.001,p.at+(e.key==='ArrowLeft'?-.01:.01)));
+    selectInMap(i);queueAudioEdit();drawAudioPosition();
+  };
   map.onkeydown=e=>{
     if(!audioDesign.spatial||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
     e.preventDefault();const p=editingPose();
@@ -109,8 +137,8 @@ function drawAudioPosition(timeMs=null) {
   const topPath=trace.map((p,i)=>(i?'L':'M')+xy(p).map(v=>v.toFixed(2)).join(' ')).join('');
   const points=d.motion==='path'?d.keyframes:[];
   $('#audio-map').innerHTML=`<rect width="400" height="400" fill="var(--aw-inset)" rx="8"/><path d="M200 24V376M24 200H376" stroke="var(--aw-line)"/>${[1,3,5].map(m=>`<circle cx="200" cy="200" r="${40+m*24}" fill="none" stroke="var(--aw-line)"/><text x="${205+40+m*24}" y="196" fill="var(--aw-sub)" font-size="10">${m} m</text>`).join('')}<g fill="var(--aw-sub)" font-size="13" text-anchor="middle"><text x="200" y="18">前</text><text x="200" y="395">後</text><text x="13" y="205">左</text><text x="388" y="205">右</text></g><circle cx="200" cy="200" r="22" fill="var(--aw-panel)" stroke="var(--aw-ink)"/><path d="M194 178L200 170L206 178M175 192V208M225 192V208" fill="none" stroke="var(--aw-ink)" stroke-width="2"/><path d="${topPath}" fill="none" stroke="var(--aw-sub)" stroke-width="2" stroke-dasharray="4 3"/>${points.map((k,i)=>{const [kx,ky]=xy(k);return `<g data-map-key="${i}"><circle cx="${kx}" cy="${ky}" r="${i===audioKeyIndex?10:7}" fill="var(--aw-panel)" stroke="var(--aw-ink)" stroke-width="${i===audioKeyIndex?3:1}"/><text x="${kx}" y="${ky-16}" text-anchor="middle" fill="var(--aw-ink)" font-size="12">${i===0?'開始':i===points.length-1?'終了':i}</text></g>`}).join('')}<circle cx="${x}" cy="${y}" r="6" fill="var(--aw-ink)" style="pointer-events:none"/>`;
-  const sidePath=trace.map((p,i)=>(i?'L':'M')+(20+i/80*360).toFixed(2)+' '+(72-p.elevation*.6).toFixed(2)).join('');
-  $('#audio-elevation-map').innerHTML=`<path d="M20 72H380" stroke="var(--aw-line)"/><path d="${sidePath}" fill="none" stroke="var(--aw-sub)"/><circle cx="${20+audioInspectMs/d.durationMs*360}" cy="${72-p.elevation*.6}" r="5" fill="var(--aw-ink)"/><text x="20" y="15" font-size="11" fill="var(--aw-sub)">高さ</text><text x="380" y="96" text-anchor="end" font-size="11" fill="var(--aw-sub)">${(d.durationMs/1000).toFixed(2)} s</text>`;
+  const sidePath=trace.map((p,i)=>(i?'L':'M')+(20+i/80*360).toFixed(2)+' '+(100-p.elevation*.8).toFixed(2)).join('');
+  $('#audio-elevation-map').innerHTML=`<path d="M20 100H380" stroke="var(--aw-line)"/><path d="${sidePath}" fill="none" stroke="var(--aw-sub)"/>${points.map((k,i)=>`<circle cx="${20+k.at*360}" cy="${100-k.elevation*.8}" r="${i===audioKeyIndex?7:4}" fill="var(--aw-panel)" stroke="var(--aw-ink)"/>`).join('')}<circle cx="${20+audioInspectMs/d.durationMs*360}" cy="${100-p.elevation*.8}" r="5" fill="var(--aw-ink)"/><text x="20" y="15" font-size="11" fill="var(--aw-sub)">高さ</text><text x="380" y="138" text-anchor="end" font-size="11" fill="var(--aw-sub)">${(d.durationMs/1000).toFixed(2)} s</text>`;
   $('#audio-inspect').value=audioInspectMs;$('#audio-inspect').disabled=playing;
   $('#audio-inspect-value').textContent=(audioInspectMs/1000).toFixed(2)+' / '+(d.durationMs/1000).toFixed(2)+' s';
   $('#audio-position-readout').textContent=`方位 ${p.azimuth.toFixed(0)}° · 仰角 ${p.elevation.toFixed(0)}° · ${p.distanceM.toFixed(1)} m`;

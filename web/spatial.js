@@ -46,6 +46,32 @@ const Spatial = (() => {
     // One complete orbit for ordinary clip durations; keep the existing angular-speed limit.
     if (id === 'orbit') d.speed = Math.min(360, 360000 / d.durationMs);
   }
-  return {pose, wrap, ensurePath, insert, presets, applyPreset};
+  function transform(d, action) {
+    if (action === 'mirror') {
+      d.azimuth = -d.azimuth; d.endAzimuth = -d.endAzimuth; d.speed = -d.speed;
+      (d.keyframes || []).forEach(k => k.azimuth = -k.azimuth); return;
+    }
+    if (action === 'reverse') {
+      if (d.motion === 'orbit') { d.azimuth = pose(d,1).azimuth; d.speed = -d.speed; }
+      else if (d.motion === 'sweep') [d.azimuth,d.endAzimuth] = [d.endAzimuth,d.azimuth];
+      else if (d.motion === 'path') d.keyframes = d.keyframes.slice().reverse().map(k=>({...k,at:1-k.at}));
+      return;
+    }
+    if (d.motion !== 'path') return;
+    if (action === 'space') d.keyframes.forEach((k,i)=>k.at=i/(d.keyframes.length-1));
+    if (action === 'close') d.keyframes[d.keyframes.length-1] = {...d.keyframes[0],at:1};
+  }
+  function history(limit=40) {
+    let past=[],future=[],current=null;
+    const copy=v=>structuredClone(v), same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+    return {
+      reset(v){past=[];future=[];current=copy(v)},
+      record(v){if(current===null){this.reset(v);return}if(same(current,v))return;past.push(current);if(past.length>limit)past.shift();current=copy(v);future=[]},
+      undo(){if(!past.length)return null;future.push(current);current=past.pop();return copy(current)},
+      redo(){if(!future.length)return null;past.push(current);current=future.pop();return copy(current)},
+      get canUndo(){return past.length>0},get canRedo(){return future.length>0}
+    };
+  }
+  return {pose, wrap, ensurePath, insert, presets, applyPreset, transform, history};
 })();
 if (typeof module !== 'undefined') module.exports = Spatial;

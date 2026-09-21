@@ -2,6 +2,7 @@
 mod audio;
 mod auditory;
 mod model;
+mod unity_export;
 use model::{Clip, Project, Settings, Wave};
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{Emitter, Manager, State};
@@ -381,6 +382,21 @@ async fn export_audio(
     .await
     .map_err(|e| e.to_string())?
 }
+#[tauri::command]
+async fn export_unity(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let s = app.state::<App>();
+        let project = s.project.lock().unwrap().clone();
+        let Some(folder) = app.dialog().file().blocking_pick_folder() else {
+            return Ok(None);
+        };
+        let destination = folder.into_path().map_err(|e| e.to_string())?;
+        let output = unity_export::export(&project, &s.dir, &destination)?;
+        Ok(Some(output.display().to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
 fn write_wav(path: &std::path::Path, samples: &[f32], channels: u16) -> Result<(), String> {
     model::check_peak(samples, 1.)?;
     let spec = hound::WavSpec {
@@ -404,6 +420,35 @@ fn main() {
             let result =
                 serde_json::json!({"asio":cfg!(feature="asio"),"devices":audio::devices()});
             let _ = std::fs::write(path, serde_json::to_vec_pretty(&result).unwrap());
+        }
+        return;
+    }
+    if args.get(1).map(String::as_str) == Some("--export-unity") {
+        let result = (|| -> Result<PathBuf, String> {
+            let file = PathBuf::from(
+                args.get(2)
+                    .ok_or("Usage: AirCue --export-unity project.aircue destination")?,
+            );
+            let destination = PathBuf::from(args.get(3).ok_or("Export destination is required")?);
+            if std::fs::metadata(&file).map_err(|e| e.to_string())?.len() > 2_000_000 {
+                return Err("Project file is too large".into());
+            }
+            let project: Project =
+                serde_json::from_slice(&std::fs::read(&file).map_err(|e| e.to_string())?)
+                    .map_err(|e| e.to_string())?;
+            let media = if file.extension().is_some_and(|e| e == "aircue") {
+                file.with_extension("media")
+            } else {
+                file.parent().unwrap().to_path_buf()
+            };
+            unity_export::export(&project, &media, &destination)
+        })();
+        match result {
+            Ok(path) => println!("{}", path.display()),
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(1)
+            }
         }
         return;
     }
@@ -478,7 +523,8 @@ fn main() {
             audio_status,
             set_preview_level,
             project_file,
-            export_wav
+            export_wav,
+            export_unity
         ])
         .on_window_event(|w, e| {
             if let tauri::WindowEvent::CloseRequested { .. } = e {

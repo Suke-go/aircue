@@ -26,6 +26,8 @@ flowchart LR
 | `web/auditory.js` | 音声取り込みUI、テスト音、オーディオトラック |
 | `web/spatial.js` | プリセット、経路の補間と通過点の追加 |
 | `web/spatial-editor.js` | 音源位置の図、通過点、確認スライダー |
+| `src/unity_export.rs` | Unity用音声・メタデータ・Importerの書き出し |
+| `unity/Runtime`・`unity/Editor` | UnityのPrefab生成、PCM取り込み、再生 |
 | `src/main.rs` | Tauriコマンド、永続化、ファイルダイアログ、書き出し |
 | `src/model.rs` | 空気砲波形、標準波形、プロジェクト検証、駆動波形の合成 |
 | `src/auditory.rs` | 音声デコード、素材管理、テスト音、HRTF畳み込み、混合タイムライン |
@@ -46,7 +48,7 @@ flowchart LR
 
 立体音響の実装仕様は [SPATIAL_AUDIO.md](SPATIAL_AUDIO.md) にまとめています。v0.3.0で位置・高さ・距離のキーフレーム経路、8種類の定位プリセット、経路の視覚確認を実装しました。
 
-Unity向け実行データ、実測による校正、空気流のモデル、個人化HRTFは未実装です。
+Unityへの完成音響・タイミングの書き出しはv0.4.0で実装しています。[Unity連携設計](UNITY_INTEGRATION.md) を参照してください。実測による校正、空気流のモデル、個人化HRTFは未実装です。
 
 ## 配布
 
