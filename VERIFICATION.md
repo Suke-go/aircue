@@ -7,3 +7,4 @@
 - The UI adapter is test-only and is not included in the application.
 - Native file dialog interaction, acoustic localization, Rubix44 simultaneous four-channel playback and physical air-puff strength were not verified in this release session.
 - GitHub Actions runs the Rust tests, JavaScript syntax/version checks, NSIS packaging and corresponding-source packaging before publishing a tag release.
+- GitHub Windows runner: unit tests and NSIS build passed; AirCue-windows-x64 artifact uploaded in run 35562676413.
