@@ -75,7 +75,7 @@ function renderDevices(){
 }
 async function refreshDevices(){$('#refresh-devices').disabled=true;message('出力機器を確認中…');try{devices=await invoke('list_devices');renderDevices();message('出力機器を更新しました')}finally{if($('#refresh-devices'))$('#refresh-devices').disabled=false}}
 function renderView(){
- $('#title').textContent={waveform:'波形作成',audio:'オーディオ',timeline:'タイムライン',experiment:'実験連携',settings:'出力設定'}[view];
+ $('#title').textContent={waveform:'波形作成',audio:'オーディオ',timeline:'タイムライン',experiment:'実験',settings:'出力設定'}[view];
  $$('[data-window]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.window===view)));
  if(view==='waveform')creation();else if(view==='audio')audioEditor();else if(view==='timeline')timeline();else if(view==='experiment')experimentEditor();else{settings();attempt(refreshDevices)}
 }

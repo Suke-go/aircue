@@ -2,6 +2,7 @@
 mod audio;
 mod auditory;
 mod experiment;
+mod experiment_set;
 mod model;
 mod unity_export;
 use model::{Clip, Project, Settings, Wave};
@@ -204,6 +205,129 @@ fn play_experiment_test(
 #[tauri::command]
 fn stop_experiment_trial(app: tauri::AppHandle, s: State<App>) -> serde_json::Value {
     s.experiment.stop_trial(&app, None)
+}
+#[tauri::command]
+fn experiment_template(template: String) -> Result<Vec<experiment_set::Condition>, String> {
+    experiment_set::defaults(&template)
+}
+#[tauri::command]
+async fn generate_experiment_set(
+    app: tauri::AppHandle,
+    plan: experiment_set::Plan,
+) -> Result<experiment_set::Manifest, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let s = app.state::<App>();
+        let p = s.project.lock().unwrap().clone();
+        let device = audio::devices()?
+            .into_iter()
+            .find(|d| Some(&d.id) == p.settings.device_id.as_ref());
+        experiment_set::generate(
+            &p,
+            plan,
+            serde_json::to_value(device).map_err(|e| e.to_string())?,
+            &s.dir,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn experiment_manifest_file(
+    app: tauri::AppHandle,
+    manifest: Option<experiment_set::Manifest>,
+) -> Result<Option<experiment_set::Manifest>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dialog = app
+            .dialog()
+            .file()
+            .add_filter("AirCue Experiment", &["aircueexp"]);
+        if let Some(m) = manifest {
+            experiment_set::validate(&m)?;
+            let Some(file) = dialog
+                .set_file_name("Experiment.aircueexp")
+                .blocking_save_file()
+            else {
+                return Ok(None);
+            };
+            std::fs::write(
+                file.into_path().map_err(|e| e.to_string())?,
+                serde_json::to_vec_pretty(&m).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(Some(m))
+        } else {
+            let Some(file) = dialog.blocking_pick_file() else {
+                return Ok(None);
+            };
+            Ok(Some(experiment_set::load(
+                &file.into_path().map_err(|e| e.to_string())?,
+            )?))
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn export_experiment_set(
+    app: tauri::AppHandle,
+    manifest: experiment_set::Manifest,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let s = app.state::<App>();
+        let p = s.project.lock().unwrap().clone();
+        let Some(folder) = app.dialog().file().blocking_pick_folder() else {
+            return Ok(None);
+        };
+        experiment_set::export(
+            &manifest,
+            &p,
+            &s.dir,
+            &folder.into_path().map_err(|e| e.to_string())?,
+        )
+        .map(|p| Some(p.display().to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn preview_calibration(
+    app: tauri::AppHandle,
+    modality: String,
+    side: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if !["audio", "air"].contains(&modality.as_str())
+            || !["left", "right"].contains(&side.as_str())
+        {
+            return Err("左右と刺激を指定してください".into());
+        }
+        let s = app.state::<App>();
+        let p = s.project.lock().unwrap().clone();
+        let device = p
+            .settings
+            .device_id
+            .clone()
+            .ok_or("出力設定で機器を選択してください")?;
+        let index = if modality == "audio" { 0 } else { 2 } + if side == "left" { 0 } else { 1 };
+        let (_, rendered) = experiment_set::calibration(&p, &s.dir, index)?;
+        let pair = if modality == "audio" {
+            [p.settings.routing[0] - 1, p.settings.routing[1] - 1]
+        } else {
+            [p.settings.routing[2] - 1, p.settings.routing[3] - 1]
+        };
+        s.audio.play_extended(
+            device,
+            rendered,
+            1.,
+            false,
+            pair,
+            "calibration",
+            false,
+            false,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 fn set_preview_level(s: State<App>, db: f64) -> Result<(), String> {
@@ -463,7 +587,10 @@ fn main() {
         }
         return;
     }
-    if args.get(1).map(String::as_str) == Some("--export-unity") {
+    if matches!(
+        args.get(1).map(String::as_str),
+        Some("--export-unity" | "--export-experiment")
+    ) {
         let result = (|| -> Result<PathBuf, String> {
             let file = PathBuf::from(
                 args.get(2)
@@ -481,7 +608,24 @@ fn main() {
             } else {
                 file.parent().unwrap().to_path_buf()
             };
-            unity_export::export(&project, &media, &destination)
+            if args[1] == "--export-experiment" {
+                let template = args.get(4).map(String::as_str).unwrap_or("modality");
+                let plan = experiment_set::Plan {
+                    template: template.into(),
+                    seed: 42,
+                    repetitions: 4,
+                    blocks: 1,
+                    participants: vec!["P001".into()],
+                    primary: "direction".into(),
+                    secondary: vec![],
+                    conditions: experiment_set::defaults(template)?,
+                };
+                let manifest =
+                    experiment_set::generate(&project, plan, serde_json::Value::Null, &media)?;
+                experiment_set::export(&manifest, &project, &media, &destination)
+            } else {
+                unity_export::export(&project, &media, &destination)
+            }
         })();
         match result {
             Ok(path) => println!("{}", path.display()),
@@ -543,6 +687,11 @@ fn main() {
             startup_error: startup_issue,
         })
         .invoke_handler(tauri::generate_handler![
+            experiment_template,
+            generate_experiment_set,
+            experiment_manifest_file,
+            export_experiment_set,
+            preview_calibration,
             get_project,
             get_presets,
             import_audio,

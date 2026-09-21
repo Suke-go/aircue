@@ -11,7 +11,7 @@ function spatialEditorMarkup(d) {
   audioInspectMs = Math.min(audioInspectMs, d.durationMs);
   const p = editingPose(d);
   return `<section class="au-position"><div class="aw-row aw-between"><strong>音源位置</strong><label class="au-enable"><input id="audio-spatial" type="checkbox" ${d.spatial?'checked':''}> 立体音響</label></div>
-    <div class="au-presetbar"><label>定位プリセット <select id="spatial-preset" aria-label="定位プリセット"><option value="">選択してください</option>${Object.entries(Spatial.presets).map(([id,p])=>`<option value="${id}">${p.name}</option>`).join('')}</select></label></div>
+    <div class="au-mode aw-row"><button data-audio-mode="simple" aria-pressed="false">かんたん</button><button data-audio-mode="detail" aria-pressed="true">詳細</button></div><div class="au-presetbar"><label>定位プリセット <select id="spatial-preset" aria-label="定位プリセット"><option value="">選択してください</option>${Object.entries(Spatial.presets).map(([id,p])=>`<option value="${id}">${p.name}</option>`).join('')}</select></label></div>
     <div ${d.spatial?'':'inert'} class="au-spatialbody ${d.spatial?'':'au-disabled'}"><div class="au-mapwrap">
       <div id="audio-map-control" tabindex="0" role="group" aria-label="音源位置。ドラッグで移動、左右キーで方位、上下キーで距離を調整"><svg id="audio-map" viewBox="0 0 400 400" role="img" aria-label="音源と経路"></svg></div>
       <div class="aw-sub au-center">前 0° · 右 ＋90°</div>
@@ -127,6 +127,7 @@ function bindSpatialEditor() {
 }
 
 function drawAudioPosition(timeMs=null) {
+  if(audioEditorMode==='simple'){drawSimpleSpatial();return;}
   if(!$('#audio-map')||!audioDesign)return;
   const d=audioDesign, playing=timeMs!==null;
   if(playing&&!audioPointerEditing)audioInspectMs=Math.max(0,Math.min(d.durationMs,timeMs));

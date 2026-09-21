@@ -1,4 +1,11 @@
-# Unity連携 — v0.5.0
+# Unity連携 — v0.6.0
+
+## v0.6: 実験セット
+
+「実験」画面に独立した実験セットを追加した。4研究テンプレート、編集可能なJSON因子表、参加者別の再現可能な順序、manifest保存／読み込み、キャリブレーション導線、完成音響のExperiment Bundleを書き出せる。UnityのExperiment Runnerは校正確認・試行順・回答／中止ログを扱う。操作、固定する情報、初期実験の条件数と制約は [EXPERIMENT_DESIGN.md](EXPERIMENT_DESIGN.md) を参照。
+
+以下は引き続き利用できるv0.5の単一タイムライン連携仕様。ローカル連携は「実験」画面の折りたたみ内に置き、Experiment Bundleとは別方式として扱う。
+
 
 ## 採用方式
 

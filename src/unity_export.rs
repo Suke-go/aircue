@@ -4,6 +4,22 @@ use std::path::{Path, PathBuf};
 
 const FILES: &[(&str, &str)] = &[
     (
+        "docs/EXPERIMENT_DESIGN.md",
+        include_str!("../docs/EXPERIMENT_DESIGN.md"),
+    ),
+    (
+        "Runtime/AirCueExperimentSet.cs",
+        include_str!("../unity/Runtime/AirCueExperimentSet.cs"),
+    ),
+    (
+        "Runtime/AirCueExperimentRunner.cs",
+        include_str!("../unity/Runtime/AirCueExperimentRunner.cs"),
+    ),
+    (
+        "Editor/AirCueExperimentImporter.cs",
+        include_str!("../unity/Editor/AirCueExperimentImporter.cs"),
+    ),
+    (
         "Runtime/AirCueSequence.cs",
         include_str!("../unity/Runtime/AirCueSequence.cs"),
     ),
@@ -50,7 +66,7 @@ pub fn export(p: &model::Project, source: &Path, destination: &Path) -> Result<P
     result.map(|_| root)
 }
 
-fn write_package(
+pub(crate) fn write_package(
     p: &model::Project,
     rendered: &[f32],
     root: &Path,

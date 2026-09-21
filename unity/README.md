@@ -34,3 +34,8 @@ Windows / Unity 6を対象とします。WAVは48 kHz・24 bit PCM。付属Impor
 書き出しごとに新しいSequenceフォルダーができます。既存シーンの参照は勝手に置換しません。新しいPrefabへ置き換えるか、PlayerのSequence参照を新しい書き出しのサブアセットへ変更します。
 
 出典・利用条件は同梱の `LICENSE` と `THIRD_PARTY_HRTF.txt` を参照してください。
+
+
+## v0.6 Experiment Bundle
+
+`Experiment.aircueexp` をシーンへドラッグすると試行Runnerを生成します。自動再生はしません。匿名参加者を `BeginParticipant` で選び、`PlayCalibration` と `ConfirmCalibration` で左右・快適さを確認してから `PlayNext`、`SubmitResponse`、`Abort` を呼びます。空気刺激にはRoutedQuadが必要です。回答画面・休憩は研究スクリプトで実装してください。詳細は同梱 `docs/EXPERIMENT_DESIGN.md` を参照してください。
