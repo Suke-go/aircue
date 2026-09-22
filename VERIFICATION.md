@@ -1,5 +1,13 @@
 # AirCue 0.6.0 verification
 
+## Built-in rotating audio and air-puff starter
+
+- Correction against the user-supplied January 19, 2023 PDF, Fig.5(a)/§7.1: the default now uses the b=1 negative-100-ms/positive-100-ms rectangular drive. Positive transitions align to the audio side passes; drive starts are 100 ms earlier. The new bipolar part supports 200 ms while existing parts retain their 80 ms bounds. A 13th built-in wave exposes it in the editor.
+- Updated validation: 46 ASIO-enabled Rust tests and 22 JavaScript tests passed, including exact phase samples, zero sample sum, onset routing, rendered headphone dominance, both editor limits, preset migration and saved custom-wave preservation. These checks do not establish ±10 V at the amplifier, membrane displacement, air pressure, or physical arrival synchronization.
+- First-run startup materializes the bundled source audio and opens a seven-second timeline with two audio orbits and four alternating air cues. Saved projects retain their timeline. Startup now opens the timeline view.
+- ASIO-enabled Rust: 45 tests passed. The new test renders bundled media in a fresh data directory, checks all four air onsets/routes and headphone side dominance, checks clipping, and verifies recovery after removing the bundled asset. JavaScript: 20 tests and syntax/version checks passed.
+- The local working application's previous data was backed up before selecting the new starter; its output settings and wave library were preserved. The original 12+48 ms adaptation was superseded by the correction above. Physical output and arrival latency remain unverified.
+
 ## Follow-up: experiments without Unity
 
 - Standard Experiment Bundle now contains plain JSON and WAV, with no Unity runtime/editor files. Unity is an explicit optional adapter. Both exports use one PCM/metadata writer; a parity test checks identical manifests, checksums and condition/calibration WAVs.

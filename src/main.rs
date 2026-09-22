@@ -4,6 +4,7 @@ mod auditory;
 mod experiment;
 mod experiment_set;
 mod model;
+mod starter;
 mod stimulus_export;
 mod study;
 mod unity_export;
@@ -602,6 +603,42 @@ fn write_wav(path: &std::path::Path, samples: &[f32], channels: u16) -> Result<(
     }
     writer.finalize().map_err(|e| e.to_string())
 }
+fn load_startup(dir: &std::path::Path) -> (Project, Option<String>) {
+    let loaded = if dir.join("project.json").exists() {
+        std::fs::read(dir.join("project.json"))
+            .map_err(|e| e.to_string())
+            .and_then(|b| serde_json::from_slice::<Project>(&b).map_err(|e| e.to_string()))
+            .and_then(|mut p| {
+                p.validate()?;
+                p.ensure_presets();
+                p.validate()?;
+                Ok(p)
+            })
+    } else {
+        starter::project(&dir)
+    };
+    let (project, startup_issue) = match loaded {
+        Ok(p) => (p, None),
+        Err(e) => {
+            let backup = dir.join(format!(
+                "project.invalid-{}.json",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis()
+            ));
+            let _ = std::fs::copy(dir.join("project.json"), backup);
+            (
+                starter::project(&dir).unwrap_or_default(),
+                Some(format!(
+                    "前回のデータを読み込めませんでした。元ファイルを退避しました: {e}"
+                )),
+            )
+        }
+    };
+    (project, startup_issue)
+}
+
 fn main() {
     let args: Vec<_> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("--diagnostics") {
@@ -671,56 +708,31 @@ fn main() {
         }
         return;
     }
-    let dir = std::env::var_os("AIRCUE_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_exe()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .join("data")
-        });
-    let loaded = if dir.join("project.json").exists() {
-        std::fs::read(dir.join("project.json"))
-            .map_err(|e| e.to_string())
-            .and_then(|b| serde_json::from_slice::<Project>(&b).map_err(|e| e.to_string()))
-            .and_then(|mut p| {
-                p.validate()?;
-                p.ensure_presets();
-                p.validate()?;
-                Ok(p)
-            })
-    } else {
-        Ok(Project::default())
-    };
-    let (project, startup_issue) = match loaded {
-        Ok(p) => (p, None),
-        Err(e) => {
-            let backup = dir.join(format!(
-                "project.invalid-{}.json",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis()
-            ));
-            let _ = std::fs::copy(dir.join("project.json"), backup);
-            (
-                Project::default(),
-                Some(format!(
-                    "前回のデータを読み込めませんでした。元ファイルを退避しました: {e}"
-                )),
-            )
-        }
-    };
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(App {
-            project: Mutex::new(project),
-            audio: audio::Audio::new(),
-            experiment: experiment::Runtime::new(),
-            study: study::Runtime::default(),
-            dir,
-            startup_error: startup_issue,
+        .setup(|app| {
+            let dir = if let Some(dir) = std::env::var_os("AIRCUE_DATA_DIR") {
+                PathBuf::from(dir)
+            } else {
+                #[cfg(target_os = "macos")]
+                let dir = app.path().app_data_dir()?;
+                #[cfg(not(target_os = "macos"))]
+                let dir = std::env::current_exe()?
+                    .parent()
+                    .ok_or("Application directory missing")?
+                    .join("data");
+                dir
+            };
+            let (project, startup_issue) = load_startup(&dir);
+            app.manage(App {
+                project: Mutex::new(project),
+                audio: audio::Audio::new(),
+                experiment: experiment::Runtime::new(),
+                study: study::Runtime::default(),
+                dir,
+                startup_error: startup_issue,
+            });
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             study::start_study,

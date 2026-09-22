@@ -12,7 +12,7 @@
       {
         "label": "main",
         "title": "AirCue 0.6.0",
-        "url": "index.html?view=waveform",
+        "url": "index.html?view=timeline",
         "width": 1120,
         "height": 760,
         "minWidth": 760,

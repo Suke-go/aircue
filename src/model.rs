@@ -26,7 +26,7 @@ impl Part {
             cycles: 2.,
             push_ms: 12.,
             return_ms: 48.,
-            width_ms: 20.,
+            width_ms: if kind == "bipolar" { 100. } else { 20. },
             polarity: 1,
         }
     }
@@ -34,25 +34,38 @@ impl Part {
         match self.kind.as_str() {
             "push" => self.push_ms + self.return_ms,
             "pulse" => self.width_ms,
+            "bipolar" => 2. * self.width_ms,
             _ => self.cycles * 1000. / self.frequency,
         }
     }
     fn validate(&self) -> Result<(), String> {
-        if !["push", "sine", "triangle", "pulse"].contains(&self.kind.as_str()) {
+        if !["push", "sine", "triangle", "pulse", "bipolar"].contains(&self.kind.as_str()) {
             return Err("不明な部品です".into());
         }
-        range(self.start_ms, 0., MAX_WAVE_MS, "配置位置")?;
+        let limit = if self.kind == "bipolar" {
+            200.
+        } else {
+            MAX_WAVE_MS
+        };
+        range(self.start_ms, 0., limit, "配置位置")?;
         range(self.amplitude, 0., 100., "部品の振幅")?;
         range(self.frequency, 1., 200., "周波数")?;
         range(self.cycles, 0.1, 16., "周期数")?;
         range(self.push_ms, 1., 79., "押し出し")?;
         range(self.return_ms, 1., 79., "戻り")?;
-        range(self.width_ms, 1., 80., "パルス幅")?;
+        range(
+            self.width_ms,
+            1.,
+            if self.kind == "bipolar" { 100. } else { 80. },
+            "パルス幅",
+        )?;
         if self.polarity != 1 && self.polarity != -1 {
             return Err("極性は正または反転です".into());
         }
-        if self.start_ms + self.duration() > MAX_WAVE_MS + 1e-8 {
-            return Err("配置位置と波形の長さを80 ms以内にしてください".into());
+        if self.start_ms + self.duration() > limit + 1e-8 {
+            return Err(format!(
+                "配置位置と波形の長さを{limit} ms以内にしてください"
+            ));
         }
         Ok(())
     }
@@ -73,6 +86,14 @@ impl Part {
                 }
             }
             "pulse" => (PI * t / self.width_ms).sin().powi(2),
+            // SHITARA Fig. 5(a), b=1: negative precharge followed by positive drive.
+            "bipolar" => {
+                if t < self.width_ms {
+                    -1.
+                } else {
+                    1.
+                }
+            }
             _ => {
                 let phase = 2. * PI * self.frequency * t / 1000.;
                 let v = if self.kind == "triangle" {
@@ -249,6 +270,11 @@ pub fn default_waves() -> Vec<Wave> {
         wave("preset-pulse-long", "長い丸めパルス", pulse(40.)),
         wave("preset-sine30", "正弦波 30 Hz", sine(30., 2.)),
         wave("preset-sine60", "正弦波 60 Hz", sine(60., 3.)),
+        wave(
+            "preset-shitara-b1",
+            "SHITARA 矩形二相波 b=1（100+100 ms）",
+            Part::new("bipolar"),
+        ),
     ]
 }
 impl Default for Project {
@@ -381,6 +407,22 @@ mod tests {
         assert!(w.validate().is_err());
     }
     #[test]
+    fn shitara_b1_has_two_equal_constant_phases_and_exact_edges() {
+        let wave = default_waves()
+            .into_iter()
+            .find(|w| w.id == "preset-shitara-b1")
+            .unwrap();
+        let samples = wave.mono(false).unwrap();
+        assert_eq!(samples.len(), 9600);
+        assert!(samples[..4800].iter().all(|x| *x == -1.));
+        assert!(samples[4800..].iter().all(|x| *x == 1.));
+        assert_eq!(samples.iter().sum::<f32>(), 0.);
+        assert_eq!(wave.parts[0].sample(200.), 0.);
+        let mut shifted = wave.clone();
+        shifted.parts[0].start_ms = 0.1;
+        assert!(shifted.validate().is_err());
+    }
+    #[test]
     fn push_return_displaces_and_balances() {
         let w = Project::default().draft;
         let v = w.mono(false).unwrap();
@@ -457,13 +499,20 @@ mod preset_gain_tests {
     #[test]
     fn presets_are_distinct_and_fit_the_editor() {
         let waves = default_waves();
-        assert_eq!(waves.len(), 12);
+        assert_eq!(waves.len(), 13);
         let mut ids = std::collections::HashSet::new();
         let mut rendered = vec![];
         for w in waves {
             w.validate().unwrap();
             assert!(ids.insert(w.id.clone()));
-            assert!(w.duration() <= 80.);
+            assert!(
+                w.duration()
+                    <= if w.parts[0].kind == "bipolar" {
+                        200.
+                    } else {
+                        80.
+                    }
+            );
             let samples = w.mono(true).unwrap();
             check_peak(&samples, 1.).unwrap();
             assert!(peak(&samples) > 0.);
@@ -496,7 +545,7 @@ mod preset_gain_tests {
         p.ensure_presets();
         p.ensure_presets();
         p.validate().unwrap();
-        assert_eq!(p.waves.len(), 13);
+        assert_eq!(p.waves.len(), default_waves().len() + 1);
         assert_eq!(p.waves[0].name, "既存の編集済み波形");
         assert_eq!(p.waves[4], custom);
         assert_eq!(p.draft, draft);
@@ -514,7 +563,7 @@ mod preset_gain_tests {
             .collect();
         p.ensure_presets();
         p.validate().unwrap();
-        assert_eq!(p.waves.len(), 268);
+        assert_eq!(p.waves.len(), 256 + default_waves().len());
     }
     #[test]
     fn positive_gain_boosts_render_and_survives_save() {
