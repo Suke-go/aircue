@@ -1,0 +1,9 @@
+{
+  "resonance_hz": 80.0,
+  "q": 1.2,
+  "displacement_per_volt_mm": 0.25,
+  "diaphragm_diameter_mm": 72.0,
+  "port_diameter_mm": 20.0,
+  "xmax_mm": 4.0,
+  "speaker_count": 1
+}
